@@ -1,0 +1,10 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { KeyRound, ShieldCheck } from "lucide-react";
+
+import { PageBody, Panel } from "@/components/forge/shell";
+import { Pill } from "@/components/forge/status";
+import { getProject } from "@/lib/forge/data";
+
+export const Route = createFileRoute("/projects/$slug/integrations")({ component: Integrations });
+
+function Integrations() { const { slug } = Route.useParams(); const items = getProject(slug)!.brain.integrations; return <PageBody><Panel title="Integration registry" description="Provider contracts and configuration state from Project Brain. Secrets are intentionally never displayed."><div className="grid gap-4 md:grid-cols-2">{items.length ? items.map((item) => <article key={item.id} className="rounded-md border border-border p-4"><div className="flex items-start justify-between gap-3"><div><h2 className="text-sm font-semibold">{item.name}</h2><p className="mt-1 text-xs text-muted-foreground">{item.provider}</p></div><Pill tone={item.status === "connected" ? "success" : item.status === "error" ? "danger" : "warning"}>{item.status}</Pill></div><div className="mt-4 grid gap-2 text-xs"><div className="flex justify-between"><span className="text-muted-foreground">Category</span><span>{item.category}</span></div><div className="flex justify-between"><span className="text-muted-foreground">Capability</span><span>{item.capability ?? "Not recorded"}</span></div><div className="flex justify-between"><span className="text-muted-foreground">Environment</span><span>{item.environment ?? "Not recorded"}</span></div></div><p className="mt-4 border-t border-border pt-3 text-xs leading-relaxed text-muted-foreground">{item.note}</p><div className="mt-3 flex items-center gap-2 text-[11px] text-success"><ShieldCheck className="size-3.5" /> credentials redacted <KeyRound className="ml-auto size-3.5" /></div></article>) : <p className="text-sm text-muted-foreground">No integrations captured yet.</p>}</div></Panel></PageBody>; }
