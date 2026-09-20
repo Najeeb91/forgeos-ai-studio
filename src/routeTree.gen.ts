@@ -10,33 +10,123 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ActivityRouteImport } from './routes/activity'
+import { Route as NewRouteImport } from './routes/new'
+import { Route as ProvidersRouteImport } from './routes/providers'
+import { Route as ProjectsSlugRouteImport } from './routes/projects.$slug'
+import { Route as ProjectsSlugIndexRouteImport } from './routes/projects.$slug.index'
+import { Route as ProjectsSlugBrainRouteImport } from './routes/projects.$slug.brain'
+import { Route as ProjectsSlugBuilderRouteImport } from './routes/projects.$slug.builder'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ActivityRoute = ActivityRouteImport.update({
+  id: '/activity',
+  path: '/activity',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NewRoute = NewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProvidersRoute = ProvidersRouteImport.update({
+  id: '/providers',
+  path: '/providers',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProjectsSlugRoute = ProjectsSlugRouteImport.update({
+  id: '/projects/$slug',
+  path: '/projects/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProjectsSlugIndexRoute = ProjectsSlugIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => ProjectsSlugRoute,
+} as any)
+const ProjectsSlugBrainRoute = ProjectsSlugBrainRouteImport.update({
+  id: '/brain',
+  path: '/brain',
+  getParentRoute: () => ProjectsSlugRoute,
+} as any)
+const ProjectsSlugBuilderRoute = ProjectsSlugBuilderRouteImport.update({
+  id: '/builder',
+  path: '/builder',
+  getParentRoute: () => ProjectsSlugRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/activity': typeof ActivityRoute
+  '/new': typeof NewRoute
+  '/providers': typeof ProvidersRoute
+  '/projects/$slug': typeof ProjectsSlugRouteWithChildren
+  '/projects/$slug/brain': typeof ProjectsSlugBrainRoute
+  '/projects/$slug/builder': typeof ProjectsSlugBuilderRoute
+  '/projects/$slug/': typeof ProjectsSlugIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/activity': typeof ActivityRoute
+  '/new': typeof NewRoute
+  '/providers': typeof ProvidersRoute
+  '/projects/$slug/brain': typeof ProjectsSlugBrainRoute
+  '/projects/$slug/builder': typeof ProjectsSlugBuilderRoute
+  '/projects/$slug': typeof ProjectsSlugIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/activity': typeof ActivityRoute
+  '/new': typeof NewRoute
+  '/providers': typeof ProvidersRoute
+  '/projects/$slug': typeof ProjectsSlugRouteWithChildren
+  '/projects/$slug/brain': typeof ProjectsSlugBrainRoute
+  '/projects/$slug/builder': typeof ProjectsSlugBuilderRoute
+  '/projects/$slug/': typeof ProjectsSlugIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/activity'
+    | '/new'
+    | '/providers'
+    | '/projects/$slug'
+    | '/projects/$slug/brain'
+    | '/projects/$slug/builder'
+    | '/projects/$slug/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/activity'
+    | '/new'
+    | '/providers'
+    | '/projects/$slug/brain'
+    | '/projects/$slug/builder'
+    | '/projects/$slug'
+  id:
+    | '__root__'
+    | '/'
+    | '/activity'
+    | '/new'
+    | '/providers'
+    | '/projects/$slug'
+    | '/projects/$slug/brain'
+    | '/projects/$slug/builder'
+    | '/projects/$slug/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ActivityRoute: typeof ActivityRoute
+  NewRoute: typeof NewRoute
+  ProvidersRoute: typeof ProvidersRoute
+  ProjectsSlugRoute: typeof ProjectsSlugRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +138,80 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/activity': {
+      id: '/activity'
+      path: '/activity'
+      fullPath: '/activity'
+      preLoaderRoute: typeof ActivityRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/new': {
+      id: '/new'
+      path: '/new'
+      fullPath: '/new'
+      preLoaderRoute: typeof NewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/providers': {
+      id: '/providers'
+      path: '/providers'
+      fullPath: '/providers'
+      preLoaderRoute: typeof ProvidersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/projects/$slug': {
+      id: '/projects/$slug'
+      path: '/projects/$slug'
+      fullPath: '/projects/$slug'
+      preLoaderRoute: typeof ProjectsSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/projects/$slug/': {
+      id: '/projects/$slug/'
+      path: '/'
+      fullPath: '/projects/$slug/'
+      preLoaderRoute: typeof ProjectsSlugIndexRouteImport
+      parentRoute: typeof ProjectsSlugRoute
+    }
+    '/projects/$slug/brain': {
+      id: '/projects/$slug/brain'
+      path: '/brain'
+      fullPath: '/projects/$slug/brain'
+      preLoaderRoute: typeof ProjectsSlugBrainRouteImport
+      parentRoute: typeof ProjectsSlugRoute
+    }
+    '/projects/$slug/builder': {
+      id: '/projects/$slug/builder'
+      path: '/builder'
+      fullPath: '/projects/$slug/builder'
+      preLoaderRoute: typeof ProjectsSlugBuilderRouteImport
+      parentRoute: typeof ProjectsSlugRoute
+    }
   }
 }
 
+interface ProjectsSlugRouteChildren {
+  ProjectsSlugBrainRoute: typeof ProjectsSlugBrainRoute
+  ProjectsSlugBuilderRoute: typeof ProjectsSlugBuilderRoute
+  ProjectsSlugIndexRoute: typeof ProjectsSlugIndexRoute
+}
+
+const ProjectsSlugRouteChildren: ProjectsSlugRouteChildren = {
+  ProjectsSlugBrainRoute: ProjectsSlugBrainRoute,
+  ProjectsSlugBuilderRoute: ProjectsSlugBuilderRoute,
+  ProjectsSlugIndexRoute: ProjectsSlugIndexRoute,
+}
+
+const ProjectsSlugRouteWithChildren = ProjectsSlugRoute._addFileChildren(
+  ProjectsSlugRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ActivityRoute: ActivityRoute,
+  NewRoute: NewRoute,
+  ProvidersRoute: ProvidersRoute,
+  ProjectsSlugRoute: ProjectsSlugRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
