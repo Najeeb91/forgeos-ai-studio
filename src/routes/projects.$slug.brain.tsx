@@ -1,25 +1,294 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { PageBody, EmptyState, Panel } from "@/components/forge/shell";
+import { EmptyState, PageBody, Panel } from "@/components/forge/shell";
 import { Pill } from "@/components/forge/status";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getProject } from "@/lib/forge/data";
+import type { Requirement, SchemaTable } from "@/lib/forge/types";
 
-export const Route = createFileRoute("/projects/$slug/brain")({ component: Brain });
+export const Route = createFileRoute("/projects/$slug/brain")({
+  component: Brain,
+});
 
 function Brain() {
   const { slug } = Route.useParams();
   const project = getProject(slug)!;
   const { requirements, decisions, architecture, schema, integrations, tests, history } = project.brain;
-  return <PageBody>
-    <Panel title="Project brain" description="Durable knowledge that survives every AI run."><p className="text-sm leading-relaxed text-muted-foreground">{project.brain.vision}</p></Panel>
-    <Tabs defaultValue="requirements"><TabsList className="flex-wrap"><TabsTrigger value="requirements">Requirements</TabsTrigger><TabsTrigger value="decisions">Decisions</TabsTrigger><TabsTrigger value="architecture">Architecture</TabsTrigger><TabsTrigger value="schema">Schema</TabsTrigger><TabsTrigger value="integrations">Integrations</TabsTrigger><TabsTrigger value="tests">Tests</TabsTrigger><TabsTrigger value="history">History</TabsTrigger></TabsList>
-      <TabsContent value="requirements" className="mt-4"><Requirements items={requirements} /></TabsContent>
-      <TabsContent value="decisions" className="mt-4"><div className="grid gap-4 xl:grid-cols-2">{decisions.length ? decisions.map((d) => <Panel key={d.id} title={d.title}><p className="text-xs leading-relaxed text-muted-foreground">{d.rationale}</p><div className="mt-3 font-mono text-[11px] text-muted-foreground">alternatives: {d.alternatives.join(" · ")}<br />decided: {new Date(d.decidedAt).toLocaleDateString()}</div><div className="mt-3"><Pill tone={d.status === "accepted" ? "success" : "warning"}>{d.status}</Pill></div></Panel>) : <EmptyState title="No decisions recorded" hint="Architecture decisions will appear here." />}</div></TabsContent>
-      <TabsContent value="architecture" className="mt-4">{architecture.length ? <Panel bodyClassName="p-0"><ul className="divide-y divide-border">{architecture.map((a) => <li key={a.layer} className="grid gap-1 px-4 py-3 sm:grid-cols-[140px_1fr]"><span className="font-mono text-xs text-muted-foreground">{a.layer}</span><div><div className="text-sm">{a.choice}</div><p className="text-xs text-muted-foreground">{a.note}</p></div></li>)}</ul></Panel> : <EmptyState title="Architecture not drafted" hint="The Architecture stage records the system shape per layer." />}</TabsContent>
-      <TabsContent value="schema" className="mt-4"><Summary title="Schema" count={schema.length} detail="Tables tracked in the generated application's Brain." /></TabsContent><TabsContent value="integrations" className="mt-4"><Summary title="Integrations" count={integrations.length} detail="Provider references with secrets redacted." /></TabsContent><TabsContent value="tests" className="mt-4"><Summary title="Tests" count={tests.length} detail="Recorded test inventory; execution is not implied." /></TabsContent><TabsContent value="history" className="mt-4"><Summary title="History" count={history.length} detail="Brain change entries retained for auditability." /></TabsContent>
-    </Tabs>
-  </PageBody>;
+
+  return (
+    <PageBody>
+      <Panel title="Project brain" description="Durable knowledge that survives every AI run.">
+        <p className="text-sm leading-relaxed text-muted-foreground">{project.brain.vision}</p>
+      </Panel>
+
+      <Tabs defaultValue="requirements">
+        <TabsList className="flex-wrap">
+          <TabsTrigger value="requirements">Requirements</TabsTrigger>
+          <TabsTrigger value="decisions">Decisions</TabsTrigger>
+          <TabsTrigger value="architecture">Architecture</TabsTrigger>
+          <TabsTrigger value="schema">Schema</TabsTrigger>
+          <TabsTrigger value="integrations">Integrations</TabsTrigger>
+          <TabsTrigger value="tests">Tests</TabsTrigger>
+          <TabsTrigger value="history">History</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="requirements" className="mt-4">
+          {requirements.length ? (
+            <Panel bodyClassName="p-0">
+              <ul className="divide-y divide-border">
+                {requirements.map((item) => (
+                  <li key={item.id} className="space-y-1.5 px-4 py-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-sm font-medium">{item.title}</span>
+                      <div className="flex flex-wrap gap-2">
+                        <Pill tone="neutral">{item.kind.replace("_", " ")}</Pill>
+                        <Pill tone={item.priority === "must" ? "primary" : "neutral"}>{item.priority}</Pill>
+                        <Pill
+                          tone={
+                            item.status === "implemented"
+                              ? "success"
+                              : item.status === "approved"
+                                ? "info"
+                                : "warning"
+                          }
+                        >
+                          {item.status}
+                        </Pill>
+                      </div>
+                    </div>
+                    <p className="text-xs leading-relaxed text-muted-foreground">{item.detail}</p>
+                  </li>
+                ))}
+              </ul>
+            </Panel>
+          ) : (
+            <EmptyState
+              title="No requirements captured"
+              hint="The requirements stage will populate durable product constraints here."
+            />
+          )}
+        </TabsContent>
+
+        <TabsContent value="decisions" className="mt-4">
+          {decisions.length ? (
+            <div className="grid gap-4 xl:grid-cols-2">
+              {decisions.map((decision) => (
+                <Panel key={decision.id} title={decision.title}>
+                  <p className="text-xs leading-relaxed text-muted-foreground">{decision.rationale}</p>
+                  <div className="mt-3 space-y-1 font-mono text-[11px] text-muted-foreground">
+                    <div>alternatives: {decision.alternatives.join(" · ")}</div>
+                    <div>decided: {new Date(decision.decidedAt).toLocaleDateString()}</div>
+                  </div>
+                  <div className="mt-3">
+                    <Pill tone={decision.status === "accepted" ? "success" : "warning"}>
+                      {decision.status}
+                    </Pill>
+                  </div>
+                </Panel>
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              title="No decisions recorded"
+              hint="Architecture decisions are written here with rationale and trade-offs."
+            />
+          )}
+        </TabsContent>
+
+        <TabsContent value="architecture" className="mt-4">
+          {architecture.length ? (
+            <Panel bodyClassName="p-0">
+              <ul className="divide-y divide-border">
+                {architecture.map((item) => (
+                  <li key={item.layer} className="grid gap-1 px-4 py-3 sm:grid-cols-[140px_1fr]">
+                    <span className="font-mono text-xs text-muted-foreground">{item.layer}</span>
+                    <div>
+                      <div className="text-sm">{item.choice}</div>
+                      <p className="text-xs text-muted-foreground">{item.note}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </Panel>
+          ) : (
+            <EmptyState title="Architecture not drafted" hint="The architecture layer records the system shape." />
+          )}
+        </TabsContent>
+
+        <TabsContent value="schema" className="mt-4">
+          {schema.length ? (
+            <div className="space-y-4">
+              {schema.map((table) => (
+                <Panel key={table.name} title={table.name} description={table.purpose}>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[640px] text-left text-xs">
+                      <thead className="text-muted-foreground">
+                        <tr>
+                          <th className="px-3 py-2 font-medium">Column</th>
+                          <th className="px-3 py-2 font-medium">Type</th>
+                          <th className="px-3 py-2 font-medium">Nullability</th>
+                          <th className="px-3 py-2 font-medium">Key / relationship</th>
+                          <th className="px-3 py-2 font-medium">Note</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {table.columns.map((column) => (
+                          <tr key={`${table.name}-${column.name}`}>
+                            <td className="px-3 py-2 font-mono">{column.name}</td>
+                            <td className="px-3 py-2 font-mono text-info">{column.type}</td>
+                            <td className="px-3 py-2">{column.nullable ? "nullable" : "not null"}</td>
+                            <td className="px-3 py-2 text-muted-foreground">
+                              {column.key ? column.key : column.references ? column.references : "—"}
+                            </td>
+                            <td className="px-3 py-2 text-muted-foreground">{column.note ?? "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="mt-4 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                    <span className="font-medium text-foreground">RLS:</span>
+                    <span>{table.rls}</span>
+                    {table.indexes && table.indexes.length ? (
+                      <>
+                        <span className="font-medium text-foreground">Index(es):</span>
+                        <span>{table.indexes.join(" · ")}</span>
+                      </>
+                    ) : null}
+                  </div>
+                </Panel>
+              ))}
+            </div>
+          ) : (
+            <EmptyState title="No schema captured" hint="This project does not yet have a generated schema in the brain." />
+          )}
+        </TabsContent>
+
+        <TabsContent value="integrations" className="mt-4">
+          {integrations.length ? (
+            <div className="grid gap-4 md:grid-cols-2">
+              {integrations.map((item) => (
+                <Panel key={item.id} title={item.name}>
+                  <div className="space-y-2 text-xs">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-muted-foreground">Provider</span>
+                      <span>{item.provider}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-muted-foreground">Category</span>
+                      <span>{item.category}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-muted-foreground">Capability</span>
+                      <span>{item.capability ?? "not recorded"}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-muted-foreground">Environment</span>
+                      <span>{item.environment ?? "not recorded"}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-muted-foreground">Status</span>
+                      <Pill
+                        tone={
+                          item.status === "connected"
+                            ? "success"
+                            : item.status === "configured"
+                              ? "info"
+                              : item.status === "error"
+                                ? "danger"
+                                : "warning"
+                        }
+                      >
+                        {item.status}
+                      </Pill>
+                    </div>
+                  </div>
+                  <p className="mt-3 text-xs leading-relaxed text-muted-foreground">{item.note}</p>
+                </Panel>
+              ))}
+            </div>
+          ) : (
+            <EmptyState title="No integrations captured" hint="Integration references recorded here will show provider status and notes." />
+          )}
+        </TabsContent>
+
+        <TabsContent value="tests" className="mt-4">
+          {tests.length ? (
+            <Panel bodyClassName="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[720px] text-left text-xs">
+                  <thead className="text-muted-foreground">
+                    <tr>
+                      <th className="px-3 py-2 font-medium">Test</th>
+                      <th className="px-3 py-2 font-medium">Suite</th>
+                      <th className="px-3 py-2 font-medium">Status</th>
+                      <th className="px-3 py-2 font-medium">Duration</th>
+                      <th className="px-3 py-2 font-medium">Detail</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {tests.map((item) => (
+                      <tr key={item.id}>
+                        <td className="px-3 py-2 font-medium">{item.name}</td>
+                        <td className="px-3 py-2">{item.suite}</td>
+                        <td className="px-3 py-2">
+                          <Pill
+                            tone={
+                              item.status === "passing"
+                                ? "success"
+                                : item.status === "failing"
+                                  ? "danger"
+                                  : item.status === "flaky"
+                                    ? "warning"
+                                    : "neutral"
+                            }
+                          >
+                            {item.status}
+                          </Pill>
+                        </td>
+                        <td className="px-3 py-2 font-mono">{item.durationMs} ms</td>
+                        <td className="px-3 py-2 text-muted-foreground">{item.detail ?? "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Panel>
+          ) : (
+            <EmptyState title="No tests captured" hint="The test stage stores suites and test status for the project." />
+          )}
+        </TabsContent>
+
+        <TabsContent value="history" className="mt-4">
+          {history.length ? (
+            <Panel bodyClassName="p-0">
+              <div className="space-y-0">
+                {history.map((item) => (
+                  <div key={item.id} className="border-b border-border px-4 py-3 last:border-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <time className="font-mono text-[11px] text-muted-foreground">
+                        {new Date(item.at).toLocaleString()}
+                      </time>
+                      <Pill tone="neutral">{item.actor}</Pill>
+                      {item.stage ? <Pill tone="info">{item.stage}</Pill> : null}
+                      <Pill tone={item.risk === "high" ? "danger" : item.risk === "medium" ? "warning" : "neutral"}>
+                        risk: {item.risk}
+                      </Pill>
+                    </div>
+                    <div className="mt-2 text-sm font-medium">{item.action}</div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      target: {item.target}
+                      {item.diffSummary ? ` · ${item.diffSummary}` : ""}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Panel>
+          ) : (
+            <EmptyState title="No history recorded" hint="Project Brain history will accumulate AI and human actions here." />
+          )}
+        </TabsContent>
+      </Tabs>
+    </PageBody>
+  );
 }
-function Requirements({ items }: { items: typeof getProject extends never ? never : NonNullable<ReturnType<typeof getProject>>["brain"]["requirements"] }) { return items.length ? <Panel bodyClassName="p-0"><ul className="divide-y divide-border">{items.map((r) => <li key={r.id} className="space-y-1.5 px-4 py-3"><div className="flex flex-wrap items-center justify-between gap-2"><span className="text-sm font-medium">{r.title}</span><div className="flex gap-2"><Pill tone="neutral">{r.kind.replace("_", " ")}</Pill><Pill tone={r.priority === "must" ? "primary" : "neutral"}>{r.priority}</Pill><Pill tone={r.status === "implemented" ? "success" : r.status === "approved" ? "info" : "warning"}>{r.status}</Pill></div></div><p className="text-xs leading-relaxed text-muted-foreground">{r.detail}</p></li>)}</ul></Panel> : <EmptyState title="No requirements captured" hint="Run the Requirements stage to populate the brain." />; }
-function Summary({ title, count, detail }: { title: string; count: number; detail: string }) { return <Panel title={`${title} section`}><div className="flex items-center gap-4"><div className="font-mono text-3xl text-primary">{count}</div><p className="text-sm text-muted-foreground">{detail}</p></div></Panel>; }
