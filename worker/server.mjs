@@ -88,7 +88,7 @@ function exec(command, args, cwd) {
   });
 }
 
-async function persist(job) {
+async function persist(job, sourceFiles = []) {
   if (!pool) return;
   await pool.query(
     `INSERT INTO ai_events (id, run_id, type, payload, created_at)
@@ -103,6 +103,7 @@ async function persist(job) {
         state: job.state,
         simulated: false,
         error: job.error || null,
+        sourceFiles: sourceFiles.length ? sourceFiles : undefined,
       }),
     ]
   ).catch(() => {});
@@ -156,7 +157,7 @@ async function execute(runId, files) {
         simulated: false,
         install,
       };
-      await persist(result);
+      await persist(result, files);
       return result;
     }
 
@@ -214,6 +215,16 @@ const server = http.createServer(async (req, res) => {
       const result = await execute(payload.runId || null, payload.files || []);
 
       return json(res, result.state === "passed" ? 200 : 422, result);
+    }
+
+    if (req.method === "GET" && req.url === "/worker/source/latest") {
+      if (!authorized(req)) return json(res, 401, { error: "worker_auth_required" });
+      if (!pool) return json(res, 503, { error: "worker_database_not_configured" });
+      const result = await pool.query(
+        `SELECT payload FROM ai_events WHERE type='worker_build' ORDER BY created_at DESC LIMIT 1`
+      );
+      const payload = result.rows[0]?.payload || {};
+      return json(res, 200, { files: Array.isArray(payload.sourceFiles) ? payload.sourceFiles : [] });
     }
 
     if (req.method === "POST" && req.url === "/worker/jobs/cancel") {
