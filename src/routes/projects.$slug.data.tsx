@@ -3,15 +3,15 @@ import { KeyRound, Link2, Table2 } from "lucide-react";
 
 import { PageBody, Panel } from "@/components/forge/shell";
 import { Pill } from "@/components/forge/status";
-import { getProject } from "@/lib/forge/data";
+import { Route as parentRoute } from "./projects.$slug";
 
 export const Route = createFileRoute("/projects/$slug/data")({
   component: Data,
 });
 
 function Data() {
-  const { slug } = Route.useParams();
-  const tables = getProject(slug)!.brain.schema;
+  const { project } = parentRoute.useLoaderData();
+  const tables = project.brain.schema;
 
   return (
     <PageBody>

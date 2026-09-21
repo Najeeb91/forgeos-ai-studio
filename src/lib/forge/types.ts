@@ -10,12 +10,7 @@ export type StageId =
   | "deploy";
 
 export type StageStatus =
-  | "locked"
-  | "pending"
-  | "running"
-  | "needs_approval"
-  | "blocked"
-  | "complete";
+  "locked" | "pending" | "running" | "needs_approval" | "blocked" | "complete";
 
 export type RiskLevel = "low" | "medium" | "high";
 

@@ -3,15 +3,15 @@ import { KeyRound, ShieldCheck } from "lucide-react";
 
 import { PageBody, Panel } from "@/components/forge/shell";
 import { Pill } from "@/components/forge/status";
-import { getProject } from "@/lib/forge/data";
+import { Route as parentRoute } from "./projects.$slug";
 
 export const Route = createFileRoute("/projects/$slug/integrations")({
   component: Integrations,
 });
 
 function Integrations() {
-  const { slug } = Route.useParams();
-  const items = getProject(slug)!.brain.integrations;
+  const { project } = parentRoute.useLoaderData();
+  const items = project.brain.integrations;
 
   return (
     <PageBody>

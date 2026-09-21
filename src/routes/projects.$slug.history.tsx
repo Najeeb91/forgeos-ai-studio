@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 
 import { PageBody, Panel } from "@/components/forge/shell";
 import { Pill, RiskPill } from "@/components/forge/status";
-import { getProject } from "@/lib/forge/data";
+import { Route as parentRoute } from "./projects.$slug";
 import type { ChangeEntry } from "@/lib/forge/types";
 
 export const Route = createFileRoute("/projects/$slug/history")({
@@ -12,29 +12,34 @@ export const Route = createFileRoute("/projects/$slug/history")({
 });
 
 function History() {
-  const { slug } = Route.useParams();
-  const project = getProject(slug)!;
+  const { project } = parentRoute.useLoaderData();
   const [filter, setFilter] = useState("all");
 
   const entries = useMemo(() => {
-    const brainEvents = project.brain.history.map((entry) => ({ ...entry, source: "brain" as const }));
+    const brainEvents = project.brain.history.map((entry) => ({
+      ...entry,
+      source: "brain" as const,
+    }));
     const aiEvents = project.runs.flatMap((run) =>
       run.events.map((event) => ({
         id: `${run.id}-${event.id}`,
         at: `2026-09-20T${event.at}Z`,
-        actor: event.level === "approval" ? "human" : "ai",
+        actor: (event.level === "approval" ? "human" : "ai") as "human" | "ai",
         actorName: event.level === "approval" ? "Approval gate" : "Forge Builder",
         action: event.message,
         target: event.stage,
-        risk: event.level === "error" || event.level === "warn" ? "high" : "low",
+        risk: (event.level === "error" || event.level === "warn" ? "high" : "low") as
+          "high" | "low",
         approved: event.level === "approval" ? null : true,
-        diffSummary: undefined,
         stage: event.stage,
         source: "ai" as const,
       })),
     );
 
-    const allEntries: Array<ChangeEntry & { source: "brain" | "ai" }> = [...brainEvents, ...aiEvents];
+    const allEntries: Array<ChangeEntry & { source: "brain" | "ai" }> = [
+      ...brainEvents,
+      ...aiEvents,
+    ];
 
     return allEntries
       .sort((a, b) => b.at.localeCompare(a.at))

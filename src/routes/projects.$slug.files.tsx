@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 
 import { PageBody, Panel } from "@/components/forge/shell";
 import { Pill } from "@/components/forge/status";
-import { getProject } from "@/lib/forge/data";
+import { Route as parentRoute } from "./projects.$slug";
 import type { FileNode } from "@/lib/forge/types";
 
 export const Route = createFileRoute("/projects/$slug/files")({
@@ -25,11 +25,10 @@ function filesByStatus(files: FileNode[]) {
 }
 
 function Files() {
-  const { slug } = Route.useParams();
-  const project = getProject(slug)!;
+  const { project } = parentRoute.useLoaderData();
   const flatFiles = useMemo(() => project.files.flatMap(flatten), [project]);
   const counts = useMemo(() => filesByStatus(flatFiles), [flatFiles]);
-  const [selectedPath, setSelectedPath] = useState<string | undefined>(flatFiles[0]?.path);
+  const [selectedPath, setSelectedPath] = useState<string>(flatFiles[0]?.path ?? "");
   const selected = flatFiles.find((file) => file.path === selectedPath) ?? flatFiles[0];
 
   return (
@@ -45,7 +44,11 @@ function Files() {
               <FolderOpen className="size-3.5" />
               project tree
             </div>
-            <Tree nodes={project.files} selectedPath={selected?.path} onSelect={setSelectedPath} />
+            <Tree
+              nodes={project.files}
+              selectedPath={selected?.path ?? ""}
+              onSelect={(path) => setSelectedPath(path)}
+            />
           </div>
 
           <div className="min-w-0 overflow-hidden rounded-md border border-border bg-background">
@@ -53,7 +56,15 @@ function Files() {
               <code className="truncate">{selected?.path ?? "Select a file"}</code>
               {selected ? (
                 <div className="flex items-center gap-2">
-                  <Pill tone={selected.status === "new" ? "success" : selected.status === "modified" ? "warning" : "neutral"}>
+                  <Pill
+                    tone={
+                      selected.status === "new"
+                        ? "success"
+                        : selected.status === "modified"
+                          ? "warning"
+                          : "neutral"
+                    }
+                  >
                     {selected.status ?? "unchanged"}
                   </Pill>
                   <span className="text-muted-foreground">
@@ -70,13 +81,17 @@ function Files() {
       </Panel>
 
       <div className="grid gap-3 sm:grid-cols-3">
-        {([
-          { key: "new", label: "new" },
-          { key: "modified", label: "modified" },
-          { key: "unchanged", label: "unchanged" },
-        ] as const).map((status) => (
+        {(
+          [
+            { key: "new", label: "new" },
+            { key: "modified", label: "modified" },
+            { key: "unchanged", label: "unchanged" },
+          ] as const
+        ).map((status) => (
           <div key={status.key} className="panel p-3">
-            <div className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">{status.label}</div>
+            <div className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+              {status.label}
+            </div>
             <div className="mt-1 font-mono text-xl">{counts[status.key]}</div>
           </div>
         ))}
@@ -102,12 +117,20 @@ function Tree({
         if (node.kind === "dir") {
           return (
             <div key={node.path}>
-              <div className="flex items-center gap-2 py-1 text-xs text-muted-foreground" style={{ paddingLeft: depth * 12 }}>
+              <div
+                className="flex items-center gap-2 py-1 text-xs text-muted-foreground"
+                style={{ paddingLeft: depth * 12 }}
+              >
                 <Folder className="size-3.5 text-primary" />
                 {node.path.split("/").at(-1)}
               </div>
               {node.children ? (
-                <Tree nodes={node.children} depth={depth + 1} selectedPath={selectedPath} onSelect={onSelect} />
+                <Tree
+                  nodes={node.children}
+                  depth={depth + 1}
+                  selectedPath={selectedPath ?? ""}
+                  onSelect={onSelect}
+                />
               ) : null}
             </div>
           );

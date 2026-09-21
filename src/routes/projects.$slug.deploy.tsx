@@ -3,15 +3,14 @@ import { AlertTriangle, ExternalLink, RotateCcw } from "lucide-react";
 
 import { PageBody, Panel } from "@/components/forge/shell";
 import { Pill } from "@/components/forge/status";
-import { getProject } from "@/lib/forge/data";
+import { Route as parentRoute } from "./projects.$slug";
 
 export const Route = createFileRoute("/projects/$slug/deploy")({
   component: Deploy,
 });
 
 function Deploy() {
-  const { slug } = Route.useParams();
-  const project = getProject(slug)!;
+  const { project } = parentRoute.useLoaderData();
 
   return (
     <PageBody>
@@ -86,7 +85,8 @@ function Deploy() {
           <div>
             <p className="font-medium">Production release requires human approval.</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              The project currently holds staging behind failing tests. ForgeOS does not claim or initiate a production rollout.
+              The project currently holds staging behind failing tests. ForgeOS does not claim or
+              initiate a production rollout.
             </p>
           </div>
         </div>

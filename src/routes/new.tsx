@@ -134,7 +134,10 @@ function NewProject() {
           </Panel>
         </div>
 
-        <Panel title="What happens next" description="The lifecycle ForgeOS drives for every build.">
+        <Panel
+          title="What happens next"
+          description="The lifecycle ForgeOS drives for every build."
+        >
           <ol className="space-y-3">
             {STAGE_ORDER.map((stage, i) => (
               <li key={stage.id} className="flex gap-3">

@@ -2,23 +2,29 @@ import { createFileRoute, Link, Outlet, notFound } from "@tanstack/react-router"
 
 import { PageHeader, WorkspaceShell } from "@/components/forge/shell";
 import { Dot, Pill } from "@/components/forge/status";
-import { getProject } from "@/lib/forge/data";
+import { getForgeProject } from "@/lib/forge/repository";
 
 export const Route = createFileRoute("/projects/$slug")({
-  loader: ({ params }) => {
-    const project = getProject(params.slug);
-    if (!project) throw notFound();
-    return { name: project.name, tagline: project.tagline };
+  loader: async ({ params }) => {
+    const data = await getForgeProject({ data: params.slug });
+    if (!data) throw notFound();
+    return data;
   },
   head: ({ loaderData }) => ({
     meta: [
-      { title: loaderData ? `${loaderData.name} — ForgeOS` : "Project — ForgeOS" },
+      { title: loaderData?.project ? `${loaderData.project.name} — ForgeOS` : "Project — ForgeOS" },
       {
         name: "description",
-        content: loaderData?.tagline ?? "A ForgeOS project workspace.",
+        content: loaderData?.project?.tagline ?? "A ForgeOS project workspace.",
       },
-      { property: "og:title", content: loaderData ? `${loaderData.name} — ForgeOS` : "ForgeOS" },
-      { property: "og:description", content: loaderData?.tagline ?? "A ForgeOS project workspace." },
+      {
+        property: "og:title",
+        content: loaderData?.project ? `${loaderData.project.name} — ForgeOS` : "ForgeOS",
+      },
+      {
+        property: "og:description",
+        content: loaderData?.project?.tagline ?? "A ForgeOS project workspace.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -40,8 +46,8 @@ const tabs = [
 ] as const;
 
 function ProjectLayout() {
-  const { slug } = Route.useParams();
-  const project = getProject(slug)!;
+  const data = Route.useLoaderData();
+  const project = data.project;
 
   return (
     <WorkspaceShell>
@@ -50,6 +56,7 @@ function ProjectLayout() {
           <span className="flex items-center gap-2">
             {project.name}
             {project.benchmark ? <Pill tone="primary">benchmark</Pill> : null}
+            {data.source === "seed" ? <Pill tone="warning">demo data</Pill> : null}
           </span>
         }
         description={project.description}
@@ -87,7 +94,7 @@ function ProjectLayout() {
             <Link
               key={tab.to}
               to={tab.to}
-              params={{ slug }}
+              params={{ slug: project.slug }}
               activeOptions={{ exact: tab.exact }}
               className="border-b-2 border-transparent px-3 py-3 text-sm text-muted-foreground transition-colors hover:text-foreground data-[status=active]:border-primary data-[status=active]:text-foreground"
             >

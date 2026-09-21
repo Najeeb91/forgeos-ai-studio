@@ -2,9 +2,12 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 
 import { PageBody, PageHeader, Panel, WorkspaceShell } from "@/components/forge/shell";
 import { Pill, RiskPill } from "@/components/forge/status";
-import { projects } from "@/lib/forge/data";
+import { listForgeProjects } from "@/lib/forge/repository";
 
 export const Route = createFileRoute("/activity")({
+  loader: async () => {
+    return await listForgeProjects();
+  },
   head: () => ({
     meta: [
       { title: "Activity — ForgeOS" },
@@ -26,6 +29,9 @@ export const Route = createFileRoute("/activity")({
 });
 
 function Activity() {
+  const data = Route.useLoaderData();
+  const projects = data.projects;
+
   const entries = projects
     .flatMap((p) => p.brain.history.map((h) => ({ project: p, entry: h })))
     .sort((a, b) => b.entry.at.localeCompare(a.entry.at));
@@ -41,6 +47,7 @@ function Activity() {
             <Pill tone="warning">
               {entries.filter((e) => e.entry.approved === null).length} unresolved
             </Pill>
+            {data.source === "seed" ? <Pill tone="warning">demo data</Pill> : null}
           </>
         }
       />
@@ -64,7 +71,11 @@ function Activity() {
                     </Link>
                     <Pill
                       tone={
-                        entry.actor === "ai" ? "primary" : entry.actor === "human" ? "info" : "neutral"
+                        entry.actor === "ai"
+                          ? "primary"
+                          : entry.actor === "human"
+                            ? "info"
+                            : "neutral"
                       }
                     >
                       {entry.actorName}

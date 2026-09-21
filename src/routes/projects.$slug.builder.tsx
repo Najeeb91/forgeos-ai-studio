@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { PageBody, EmptyState, Panel } from "@/components/forge/shell";
 import { Pill, RiskPill } from "@/components/forge/status";
-import { getProject } from "@/lib/forge/data";
+import { Route as parentRoute } from "./projects.$slug";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/projects/$slug/builder")({
@@ -23,8 +23,7 @@ const levelTone = {
 } as const;
 
 function Builder() {
-  const { slug } = Route.useParams();
-  const project = getProject(slug)!;
+  const { project } = parentRoute.useLoaderData();
   const run = project.runs[0];
   const [prompt, setPrompt] = useState("");
   const [decisions, setDecisions] = useState<Record<string, "approved" | "rejected">>({});

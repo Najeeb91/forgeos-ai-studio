@@ -5,9 +5,12 @@ import { Button } from "@/components/ui/button";
 import { PageBody, PageHeader, Panel, WorkspaceShell } from "@/components/forge/shell";
 import { StageRail } from "@/components/forge/stage-rail";
 import { Dot, Pill } from "@/components/forge/status";
-import { projects } from "@/lib/forge/data";
+import { listForgeProjects } from "@/lib/forge/repository";
 
 export const Route = createFileRoute("/")({
+  loader: async () => {
+    return await listForgeProjects();
+  },
   head: () => ({
     meta: [
       { title: "ForgeOS — Universal AI Software Factory" },
@@ -29,6 +32,9 @@ export const Route = createFileRoute("/")({
 });
 
 function Workspace() {
+  const data = Route.useLoaderData();
+  const projects = data.projects;
+
   const approvals = projects.flatMap((p) =>
     p.stages.filter((s) => s.status === "needs_approval").map((s) => ({ project: p, stage: s })),
   );
@@ -54,6 +60,7 @@ function Workspace() {
             <Pill tone="primary">{projects.length} projects</Pill>
             <Pill tone="warning">{approvals.length} awaiting approval</Pill>
             <Pill tone="danger">{failing.length} failing tests</Pill>
+            {data.source === "seed" ? <Pill tone="warning">demo data</Pill> : null}
             <Pill tone="info">provider router: active</Pill>
           </>
         }

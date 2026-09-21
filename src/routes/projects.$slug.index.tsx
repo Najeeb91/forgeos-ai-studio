@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { PageBody, Panel } from "@/components/forge/shell";
 import { StageRail } from "@/components/forge/stage-rail";
 import { Pill, RiskPill } from "@/components/forge/status";
-import { getProject } from "@/lib/forge/data";
+import { Route as parentRoute } from "./projects.$slug";
 
 export const Route = createFileRoute("/projects/$slug/")({
   component: Overview,
@@ -13,7 +13,7 @@ export const Route = createFileRoute("/projects/$slug/")({
 
 function Overview() {
   const { slug } = Route.useParams();
-  const project = getProject(slug)!;
+  const { project } = parentRoute.useLoaderData();
   const run = project.runs[0];
   const failing = project.brain.tests.filter((t) => t.status === "failing").length;
 
@@ -60,7 +60,7 @@ function Overview() {
           <p className="text-sm leading-relaxed text-muted-foreground">{project.brain.vision}</p>
         </Panel>
 
-        <Panel title="Current AI run" bodyClassName={run ? "space-y-3" : undefined}>
+        <Panel title="Current AI run" bodyClassName={run ? "space-y-3" : ""}>
           {run ? (
             <>
               <p className="rounded-md border border-border bg-elevated/50 p-3 font-mono text-xs leading-relaxed">
@@ -69,9 +69,7 @@ function Overview() {
               <div className="flex flex-wrap gap-2">
                 <Pill tone="info">{run.provider}</Pill>
                 <Pill tone="warning">{run.status.replace("_", " ")}</Pill>
-                <Pill tone="neutral">
-                  {run.tokensIn + run.tokensOut} tokens
-                </Pill>
+                <Pill tone="neutral">{run.tokensIn + run.tokensOut} tokens</Pill>
               </div>
               <ul className="space-y-1.5">
                 {run.plan.map((step) => (

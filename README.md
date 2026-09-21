@@ -8,6 +8,7 @@ ForgeOS turns a natural-language software idea into a real, maintainable, deploy
 For this first build, create a serious production-oriented foundation with a premium, technical, calm UI. It should feel like an AI engineering workspace, not a marketing website.
 
 Core product areas to establish:
+
 1. Projects/workspace dashboard
 2. Project creation via natural-language prompt
 3. Project Brain: persistent requirements, decisions, architecture, schema, integrations, tests and change history
@@ -22,6 +23,7 @@ Core product areas to establish:
 12. Activity/change history
 
 Architecture principles:
+
 - Provider-agnostic AI layer with a future provider router
 - Application projects must not be locked to one AI vendor
 - Strong separation between project metadata, generated application source, runtime/deployment state and AI execution history

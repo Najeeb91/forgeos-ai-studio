@@ -3,7 +3,7 @@ import { CheckCircle2, Clock3, FlaskConical, XCircle } from "lucide-react";
 
 import { PageBody, Panel } from "@/components/forge/shell";
 import { Pill } from "@/components/forge/status";
-import { getProject } from "@/lib/forge/data";
+import { Route as parentRoute } from "./projects.$slug";
 
 export const Route = createFileRoute("/projects/$slug/tests")({
   component: Tests,
@@ -17,8 +17,7 @@ const icons = {
 } as const;
 
 function Tests() {
-  const { slug } = Route.useParams();
-  const project = getProject(slug)!;
+  const { project } = parentRoute.useLoaderData();
   const tests = project.brain.tests;
 
   return (
@@ -31,7 +30,9 @@ function Tests() {
         <div className="grid gap-3 sm:grid-cols-4">
           {(["passing", "failing", "skipped", "flaky"] as const).map((status) => (
             <div key={status} className="rounded-md border border-border p-3">
-              <div className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">{status}</div>
+              <div className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+                {status}
+              </div>
               <div className="mt-1 font-mono text-xl">
                 {tests.filter((item) => item.status === status).length}
               </div>
