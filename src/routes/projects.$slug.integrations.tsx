@@ -1,62 +1,72 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { KeyRound, ShieldCheck } from "lucide-react";
+import { useMemo, useState } from "react";
 
-import { PageBody, Panel } from "@/components/forge/shell";
+import { EmptyState, PageBody, Panel } from "@/components/forge/shell";
+import { FilterBar, MetaList, ProvenanceBadge } from "@/components/forge/primitives";
 import { Pill } from "@/components/forge/status";
-import { getProject } from "@/lib/forge/data";
+import { readProjectSync } from "@/lib/forge/repository";
+import { integrationTone } from "@/lib/forge/tone";
+import type { IntegrationRef } from "@/lib/forge/types";
 
 export const Route = createFileRoute("/projects/$slug/integrations")({
   component: Integrations,
 });
 
+const states = ["connected", "configured", "planned", "error"] as const;
+type StateFilter = "all" | IntegrationRef["status"];
+
 function Integrations() {
   const { slug } = Route.useParams();
-  const items = getProject(slug)!.brain.integrations;
+  const items = readProjectSync(slug)!.brain.integrations;
+  const [state, setState] = useState<StateFilter>("all");
+
+  const rows = useMemo(
+    () => items.filter((item) => state === "all" || item.status === state),
+    [items, state],
+  );
 
   return (
     <PageBody>
       <Panel
         title="Integration registry"
-        description="Provider contracts and configuration state from Project Brain. Secrets are intentionally not shown."
+        description="Provider contracts and connection state from Project Brain. Configuration is metadata only — secrets are never stored or displayed here."
+        actions={<ProvenanceBadge kind="seeded" />}
       >
-        <div className="grid gap-4 md:grid-cols-2">
-          {items.length ? (
-            items.map((item) => (
+        <FilterBar
+          label="state"
+          value={state}
+          onChange={setState}
+          options={[
+            { value: "all" as StateFilter, label: "all", count: items.length },
+            ...states.map((value) => ({
+              value: value as StateFilter,
+              label: value,
+              count: items.filter((item) => item.status === value).length,
+            })),
+          ]}
+        />
+
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          {rows.length ? (
+            rows.map((item) => (
               <article key={item.id} className="rounded-md border border-border p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <h2 className="text-sm font-semibold">{item.name}</h2>
                     <p className="mt-1 text-xs text-muted-foreground">{item.provider}</p>
                   </div>
-                  <Pill
-                    tone={
-                      item.status === "connected"
-                        ? "success"
-                        : item.status === "error"
-                          ? "danger"
-                          : item.status === "configured"
-                            ? "info"
-                            : "warning"
-                    }
-                  >
-                    {item.status}
-                  </Pill>
+                  <Pill tone={integrationTone[item.status]}>{item.status}</Pill>
                 </div>
 
-                <div className="mt-4 grid gap-2 text-xs">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-muted-foreground">Category</span>
-                    <span>{item.category}</span>
-                  </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-muted-foreground">Capability</span>
-                    <span>{item.capability ?? "not recorded"}</span>
-                  </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-muted-foreground">Environment</span>
-                    <span>{item.environment ?? "not recorded"}</span>
-                  </div>
-                </div>
+                <MetaList
+                  className="mt-4"
+                  items={[
+                    { label: "Category", value: item.category },
+                    { label: "Capability", value: item.capability ?? "not recorded" },
+                    { label: "Environment", value: item.environment ?? "not recorded" },
+                  ]}
+                />
 
                 <p className="mt-4 border-t border-border pt-3 text-xs leading-relaxed text-muted-foreground">
                   {item.note}
@@ -70,7 +80,12 @@ function Integrations() {
               </article>
             ))
           ) : (
-            <p className="text-sm text-muted-foreground">No integrations captured yet.</p>
+            <div className="md:col-span-2">
+              <EmptyState
+                title="No integrations in this state"
+                hint="Integration references are captured by the integrations stage of the pipeline."
+              />
+            </div>
           )}
         </div>
       </Panel>
