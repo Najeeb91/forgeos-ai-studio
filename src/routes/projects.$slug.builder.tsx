@@ -37,7 +37,7 @@ function Builder() {
         <Panel title="Instruct the builder" description="Scoped to this project's brain.">
           <form
             className="space-y-3"
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
               if (!prompt.trim()) return;
               setBuilding(true);
