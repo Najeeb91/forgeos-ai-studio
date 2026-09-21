@@ -17,6 +17,13 @@ import { Route as ProjectsSlugRouteImport } from './routes/projects.$slug'
 import { Route as ProjectsSlugIndexRouteImport } from './routes/projects.$slug.index'
 import { Route as ProjectsSlugBrainRouteImport } from './routes/projects.$slug.brain'
 import { Route as ProjectsSlugBuilderRouteImport } from './routes/projects.$slug.builder'
+import { Route as ProjectsSlugDataRouteImport } from './routes/projects.$slug.data'
+import { Route as ProjectsSlugDeployRouteImport } from './routes/projects.$slug.deploy'
+import { Route as ProjectsSlugFilesRouteImport } from './routes/projects.$slug.files'
+import { Route as ProjectsSlugHistoryRouteImport } from './routes/projects.$slug.history'
+import { Route as ProjectsSlugIntegrationsRouteImport } from './routes/projects.$slug.integrations'
+import { Route as ProjectsSlugPreviewRouteImport } from './routes/projects.$slug.preview'
+import { Route as ProjectsSlugTestsRouteImport } from './routes/projects.$slug.tests'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -58,6 +65,42 @@ const ProjectsSlugBuilderRoute = ProjectsSlugBuilderRouteImport.update({
   path: '/builder',
   getParentRoute: () => ProjectsSlugRoute,
 } as any)
+const ProjectsSlugDataRoute = ProjectsSlugDataRouteImport.update({
+  id: '/data',
+  path: '/data',
+  getParentRoute: () => ProjectsSlugRoute,
+} as any)
+const ProjectsSlugDeployRoute = ProjectsSlugDeployRouteImport.update({
+  id: '/deploy',
+  path: '/deploy',
+  getParentRoute: () => ProjectsSlugRoute,
+} as any)
+const ProjectsSlugFilesRoute = ProjectsSlugFilesRouteImport.update({
+  id: '/files',
+  path: '/files',
+  getParentRoute: () => ProjectsSlugRoute,
+} as any)
+const ProjectsSlugHistoryRoute = ProjectsSlugHistoryRouteImport.update({
+  id: '/history',
+  path: '/history',
+  getParentRoute: () => ProjectsSlugRoute,
+} as any)
+const ProjectsSlugIntegrationsRoute =
+  ProjectsSlugIntegrationsRouteImport.update({
+    id: '/integrations',
+    path: '/integrations',
+    getParentRoute: () => ProjectsSlugRoute,
+  } as any)
+const ProjectsSlugPreviewRoute = ProjectsSlugPreviewRouteImport.update({
+  id: '/preview',
+  path: '/preview',
+  getParentRoute: () => ProjectsSlugRoute,
+} as any)
+const ProjectsSlugTestsRoute = ProjectsSlugTestsRouteImport.update({
+  id: '/tests',
+  path: '/tests',
+  getParentRoute: () => ProjectsSlugRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -67,6 +110,13 @@ export interface FileRoutesByFullPath {
   '/projects/$slug': typeof ProjectsSlugRouteWithChildren
   '/projects/$slug/brain': typeof ProjectsSlugBrainRoute
   '/projects/$slug/builder': typeof ProjectsSlugBuilderRoute
+  '/projects/$slug/data': typeof ProjectsSlugDataRoute
+  '/projects/$slug/deploy': typeof ProjectsSlugDeployRoute
+  '/projects/$slug/files': typeof ProjectsSlugFilesRoute
+  '/projects/$slug/history': typeof ProjectsSlugHistoryRoute
+  '/projects/$slug/integrations': typeof ProjectsSlugIntegrationsRoute
+  '/projects/$slug/preview': typeof ProjectsSlugPreviewRoute
+  '/projects/$slug/tests': typeof ProjectsSlugTestsRoute
   '/projects/$slug/': typeof ProjectsSlugIndexRoute
 }
 export interface FileRoutesByTo {
@@ -76,6 +126,13 @@ export interface FileRoutesByTo {
   '/providers': typeof ProvidersRoute
   '/projects/$slug/brain': typeof ProjectsSlugBrainRoute
   '/projects/$slug/builder': typeof ProjectsSlugBuilderRoute
+  '/projects/$slug/data': typeof ProjectsSlugDataRoute
+  '/projects/$slug/deploy': typeof ProjectsSlugDeployRoute
+  '/projects/$slug/files': typeof ProjectsSlugFilesRoute
+  '/projects/$slug/history': typeof ProjectsSlugHistoryRoute
+  '/projects/$slug/integrations': typeof ProjectsSlugIntegrationsRoute
+  '/projects/$slug/preview': typeof ProjectsSlugPreviewRoute
+  '/projects/$slug/tests': typeof ProjectsSlugTestsRoute
   '/projects/$slug': typeof ProjectsSlugIndexRoute
 }
 export interface FileRoutesById {
@@ -87,6 +144,13 @@ export interface FileRoutesById {
   '/projects/$slug': typeof ProjectsSlugRouteWithChildren
   '/projects/$slug/brain': typeof ProjectsSlugBrainRoute
   '/projects/$slug/builder': typeof ProjectsSlugBuilderRoute
+  '/projects/$slug/data': typeof ProjectsSlugDataRoute
+  '/projects/$slug/deploy': typeof ProjectsSlugDeployRoute
+  '/projects/$slug/files': typeof ProjectsSlugFilesRoute
+  '/projects/$slug/history': typeof ProjectsSlugHistoryRoute
+  '/projects/$slug/integrations': typeof ProjectsSlugIntegrationsRoute
+  '/projects/$slug/preview': typeof ProjectsSlugPreviewRoute
+  '/projects/$slug/tests': typeof ProjectsSlugTestsRoute
   '/projects/$slug/': typeof ProjectsSlugIndexRoute
 }
 export interface FileRouteTypes {
@@ -99,6 +163,13 @@ export interface FileRouteTypes {
     | '/projects/$slug'
     | '/projects/$slug/brain'
     | '/projects/$slug/builder'
+    | '/projects/$slug/data'
+    | '/projects/$slug/deploy'
+    | '/projects/$slug/files'
+    | '/projects/$slug/history'
+    | '/projects/$slug/integrations'
+    | '/projects/$slug/preview'
+    | '/projects/$slug/tests'
     | '/projects/$slug/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -108,6 +179,13 @@ export interface FileRouteTypes {
     | '/providers'
     | '/projects/$slug/brain'
     | '/projects/$slug/builder'
+    | '/projects/$slug/data'
+    | '/projects/$slug/deploy'
+    | '/projects/$slug/files'
+    | '/projects/$slug/history'
+    | '/projects/$slug/integrations'
+    | '/projects/$slug/preview'
+    | '/projects/$slug/tests'
     | '/projects/$slug'
   id:
     | '__root__'
@@ -118,6 +196,13 @@ export interface FileRouteTypes {
     | '/projects/$slug'
     | '/projects/$slug/brain'
     | '/projects/$slug/builder'
+    | '/projects/$slug/data'
+    | '/projects/$slug/deploy'
+    | '/projects/$slug/files'
+    | '/projects/$slug/history'
+    | '/projects/$slug/integrations'
+    | '/projects/$slug/preview'
+    | '/projects/$slug/tests'
     | '/projects/$slug/'
   fileRoutesById: FileRoutesById
 }
@@ -187,18 +272,81 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsSlugBuilderRouteImport
       parentRoute: typeof ProjectsSlugRoute
     }
+    '/projects/$slug/data': {
+      id: '/projects/$slug/data'
+      path: '/data'
+      fullPath: '/projects/$slug/data'
+      preLoaderRoute: typeof ProjectsSlugDataRouteImport
+      parentRoute: typeof ProjectsSlugRoute
+    }
+    '/projects/$slug/deploy': {
+      id: '/projects/$slug/deploy'
+      path: '/deploy'
+      fullPath: '/projects/$slug/deploy'
+      preLoaderRoute: typeof ProjectsSlugDeployRouteImport
+      parentRoute: typeof ProjectsSlugRoute
+    }
+    '/projects/$slug/files': {
+      id: '/projects/$slug/files'
+      path: '/files'
+      fullPath: '/projects/$slug/files'
+      preLoaderRoute: typeof ProjectsSlugFilesRouteImport
+      parentRoute: typeof ProjectsSlugRoute
+    }
+    '/projects/$slug/history': {
+      id: '/projects/$slug/history'
+      path: '/history'
+      fullPath: '/projects/$slug/history'
+      preLoaderRoute: typeof ProjectsSlugHistoryRouteImport
+      parentRoute: typeof ProjectsSlugRoute
+    }
+    '/projects/$slug/integrations': {
+      id: '/projects/$slug/integrations'
+      path: '/integrations'
+      fullPath: '/projects/$slug/integrations'
+      preLoaderRoute: typeof ProjectsSlugIntegrationsRouteImport
+      parentRoute: typeof ProjectsSlugRoute
+    }
+    '/projects/$slug/preview': {
+      id: '/projects/$slug/preview'
+      path: '/preview'
+      fullPath: '/projects/$slug/preview'
+      preLoaderRoute: typeof ProjectsSlugPreviewRouteImport
+      parentRoute: typeof ProjectsSlugRoute
+    }
+    '/projects/$slug/tests': {
+      id: '/projects/$slug/tests'
+      path: '/tests'
+      fullPath: '/projects/$slug/tests'
+      preLoaderRoute: typeof ProjectsSlugTestsRouteImport
+      parentRoute: typeof ProjectsSlugRoute
+    }
   }
 }
 
 interface ProjectsSlugRouteChildren {
   ProjectsSlugBrainRoute: typeof ProjectsSlugBrainRoute
   ProjectsSlugBuilderRoute: typeof ProjectsSlugBuilderRoute
+  ProjectsSlugDataRoute: typeof ProjectsSlugDataRoute
+  ProjectsSlugDeployRoute: typeof ProjectsSlugDeployRoute
+  ProjectsSlugFilesRoute: typeof ProjectsSlugFilesRoute
+  ProjectsSlugHistoryRoute: typeof ProjectsSlugHistoryRoute
+  ProjectsSlugIntegrationsRoute: typeof ProjectsSlugIntegrationsRoute
+  ProjectsSlugPreviewRoute: typeof ProjectsSlugPreviewRoute
+  ProjectsSlugTestsRoute: typeof ProjectsSlugTestsRoute
   ProjectsSlugIndexRoute: typeof ProjectsSlugIndexRoute
 }
 
 const ProjectsSlugRouteChildren: ProjectsSlugRouteChildren = {
   ProjectsSlugBrainRoute: ProjectsSlugBrainRoute,
   ProjectsSlugBuilderRoute: ProjectsSlugBuilderRoute,
+  ProjectsSlugDataRoute: ProjectsSlugDataRoute,
+  ProjectsSlugDeployRoute: ProjectsSlugDeployRoute,
+  ProjectsSlugFilesRoute: ProjectsSlugFilesRoute,
+  ProjectsSlugHistoryRoute: ProjectsSlugHistoryRoute,
+  ProjectsSlugIntegrationsRoute: ProjectsSlugIntegrationsRoute,
+  ProjectsSlugPreviewRoute: ProjectsSlugPreviewRoute,
+  ProjectsSlugTestsRoute: ProjectsSlugTestsRoute,
   ProjectsSlugIndexRoute: ProjectsSlugIndexRoute,
 }
 

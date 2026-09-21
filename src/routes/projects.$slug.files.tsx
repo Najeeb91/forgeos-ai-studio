@@ -92,8 +92,8 @@ function Tree({
   onSelect,
 }: {
   nodes: FileNode[];
-  depth?: number;
-  selectedPath?: string;
+  depth?: number | undefined;
+  selectedPath?: string | undefined;
   onSelect: (path: string) => void;
 }) {
   return (

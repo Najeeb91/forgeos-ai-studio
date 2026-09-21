@@ -60,7 +60,7 @@ function Overview() {
           <p className="text-sm leading-relaxed text-muted-foreground">{project.brain.vision}</p>
         </Panel>
 
-        <Panel title="Current AI run" bodyClassName={run ? "space-y-3" : undefined}>
+        <Panel title="Current AI run" {...(run ? { bodyClassName: "space-y-3" } : {})}>
           {run ? (
             <>
               <p className="rounded-md border border-border bg-elevated/50 p-3 font-mono text-xs leading-relaxed">

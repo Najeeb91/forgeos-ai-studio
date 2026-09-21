@@ -18,17 +18,16 @@ function History() {
 
   const entries = useMemo(() => {
     const brainEvents = project.brain.history.map((entry) => ({ ...entry, source: "brain" as const }));
-    const aiEvents = project.runs.flatMap((run) =>
+    const aiEvents: Array<ChangeEntry & { source: "ai" }> = project.runs.flatMap((run) =>
       run.events.map((event) => ({
         id: `${run.id}-${event.id}`,
         at: `2026-09-20T${event.at}Z`,
-        actor: event.level === "approval" ? "human" : "ai",
+        actor: (event.level === "approval" ? "human" : "ai") as ChangeEntry["actor"],
         actorName: event.level === "approval" ? "Approval gate" : "Forge Builder",
         action: event.message,
         target: event.stage,
-        risk: event.level === "error" || event.level === "warn" ? "high" : "low",
+        risk: (event.level === "error" || event.level === "warn" ? "high" : "low") as ChangeEntry["risk"],
         approved: event.level === "approval" ? null : true,
-        diffSummary: undefined,
         stage: event.stage,
         source: "ai" as const,
       })),
