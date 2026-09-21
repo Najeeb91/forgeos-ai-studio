@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { PageBody, EmptyState, Panel } from "@/components/forge/shell";
 import { Pill, RiskPill } from "@/components/forge/status";
 import { getProject } from "@/lib/forge/data";
+import { runForgeBuild } from "@/lib/forge/execution.functions";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/projects/$slug/builder")({
@@ -28,6 +29,7 @@ function Builder() {
   const run = project.runs[0];
   const [prompt, setPrompt] = useState("");
   const [decisions, setDecisions] = useState<Record<string, "approved" | "rejected">>({});
+  const [building, setBuilding] = useState(false);
 
   return (
     <PageBody className="grid gap-5 xl:grid-cols-[1fr_1.1fr]">
@@ -38,8 +40,22 @@ function Builder() {
             onSubmit={(e) => {
               e.preventDefault();
               if (!prompt.trim()) return;
-              toast.success("Queued behind the current run — a plan will be drafted first.");
-              setPrompt("");
+              setBuilding(true);
+              const requestedPrompt = prompt.trim();
+              const runId = globalThis.crypto?.randomUUID?.() ?? `run-${Date.now()}`;
+              try {
+                const result = await runForgeBuild({ data: { runId, prompt: requestedPrompt } });
+                if (result.state === "passed") {
+                  toast.success(`Real worker build passed — ${result.sourceFileCount} source files verified.`);
+                } else {
+                  toast.error("Real worker build failed. Open Tests/History for execution details.");
+                }
+                setPrompt("");
+              } catch (error) {
+                toast.error(error instanceof Error ? error.message : "ForgeOS execution failed");
+              } finally {
+                setBuilding(false);
+              }
             }}
           >
             <Textarea
@@ -49,9 +65,9 @@ function Builder() {
               className="font-mono text-[13px]"
               placeholder="e.g. Add tank dip capture to the shift close flow and include it in variance evidence."
             />
-            <Button type="submit" size="sm">
+            <Button type="submit" size="sm" disabled={building}>
               <Play className="size-3.5" />
-              Plan change
+              {building ? "Building…" : "Build & verify"}
             </Button>
           </form>
         </Panel>
