@@ -24,7 +24,7 @@ function Preview() {
       const index=files.find(f=>f.path==="index.html")?.content??"";
       const main=files.find(f=>f.path==="src/main.js")?.content??"";
       const css=files.find(f=>f.path==="src/styles.css")?.content??"";
-      const safeMain=main.replace(/<\\/script/gi,"<\\\\/script");
+      const safeMain=main.replaceAll("</script","<\\/script");
       const doc=index.replace('<script type="module" src="/src/main.js"></script>',`<style>${css}</style><script>${safeMain}</script>`);
       setSrcDoc(doc);setReal(true);
     }).catch(()=>setReal(false));
