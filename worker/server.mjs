@@ -228,7 +228,7 @@ const server = http.createServer(async (req, res) => {
       if (!authorized(req)) return json(res, 401, { error: "worker_auth_required" });
       if (!pool) return json(res, 503, { error: "worker_database_not_configured" });
       const slug = decodeURIComponent(req.url.slice("/worker/project/".length));
-      return json(res, 200, { project: await readProject(pool, slug) });
+      return json(res, 200, await readProject(pool, slug) || { project: null });
     }
 
     if (req.method === "GET" && req.url === "/worker/source/latest") {
