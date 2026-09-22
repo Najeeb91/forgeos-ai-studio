@@ -5,7 +5,8 @@ import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
-import { buildAndPersist, repairAndBuild, latestSource, capabilities, ensureSchema, readProject } from "./forge-core.mjs";
+import { buildAndPersist, repairAndBuild, latestSource, capabilities, readProject } from "./forge-core.mjs";
+import { runMigrations } from "./migrate.mjs";
 
 const PORT = Number(process.env.PORT || 8080);
 const WORKER_TOKEN = process.env.FORGEOS_WORKER_TOKEN || "";
@@ -261,21 +262,28 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-if (pool) {
-  ensureSchema(pool).then(() => {
-    console.log(JSON.stringify({ service: "forgeos-execution-worker", databaseSchema: "ready" }));
-  }).catch((error) => {
-    console.error(JSON.stringify({ service: "forgeos-execution-worker", databaseSchema: "failed", error: error instanceof Error ? error.message : String(error) }));
+async function bootstrap() {
+  if (pool) {
+    await runMigrations(pool);
+    console.log(JSON.stringify({ service: "forgeos-execution-worker", databaseSchema: "migrations-ready" }));
+  }
+  server.listen(PORT, "0.0.0.0", () => {
+    console.log(JSON.stringify({
+      service: "forgeos-execution-worker",
+      port: PORT,
+      realExecution: true,
+      authenticatedExecution: Boolean(WORKER_TOKEN),
+    }));
   });
 }
 
-server.listen(PORT, "0.0.0.0", () => {
-  console.log(JSON.stringify({
+bootstrap().catch((error) => {
+  console.error(JSON.stringify({
     service: "forgeos-execution-worker",
-    port: PORT,
-    realExecution: true,
-    authenticatedExecution: Boolean(WORKER_TOKEN),
+    startup: "failed",
+    error: error instanceof Error ? error.message : String(error)
   }));
+  process.exit(1);
 });
 
 process.on("SIGTERM", async () => {
