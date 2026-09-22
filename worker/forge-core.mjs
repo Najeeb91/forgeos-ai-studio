@@ -279,6 +279,14 @@ async function recordBuild(pool,{runId,projectSlug,prompt,artifacts,result,gener
   }
   await pool.query("INSERT INTO conversation_messages(id,conversation_id,role,content,run_id) VALUES($1,$2,'user',$3,$4)",[randomUUID(),conversationId,prompt,runId]);
   await pool.query("INSERT INTO project_memory_entries(id,project_id,kind,title,content,author_type,source,provenance_run_id) VALUES($1,$2,'requirement',$3,$4,'user','builder',$5)",[randomUUID(),projectId,"Builder requirement",prompt,runId]);
+  const previousBrain=(await pool.query("SELECT version,vision,requirements,decisions,architecture,"schema",integrations FROM project_brain_versions WHERE project_id=$1 ORDER BY version DESC LIMIT 1",[projectId])).rows[0];
+  const brainVersion=Number(previousBrain?.version||0)+1;
+  const requirements=Array.isArray(previousBrain?.requirements)?[...previousBrain.requirements,{id:randomUUID(),title:"Builder requirement",detail:prompt,kind:"functional",priority:"must",status:"draft"}]:[{id:randomUUID(),title:"Builder requirement",detail:prompt,kind:"functional",priority:"must",status:"draft"}];
+  await pool.query(
+    "INSERT INTO project_brain_versions(id,project_id,version,vision,requirements,decisions,architecture,\"schema\",integrations) VALUES($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7::jsonb,$8::jsonb,$9::jsonb)",
+    [randomUUID(),projectId,brainVersion,previousBrain?.vision||"Build complete real software from natural language.",JSON.stringify(requirements),JSON.stringify(previousBrain?.decisions||[]),JSON.stringify(previousBrain?.architecture||[{layer:"frontend",choice:"React + TypeScript",note:"canonical ForgeOS studio"},{layer:"execution",choice:"provider adapters",note:"replaceable execution infrastructure"}]),JSON.stringify(previousBrain?.schema||[]),JSON.stringify(previousBrain?.integrations||[])]
+  );
+  await pool.query("INSERT INTO project_memory_entries(id,project_id,kind,title,content,author_type,source,provenance_run_id,provenance_brain_version_id) VALUES($1,$2,'milestone',$3,$4,'system','brain-projection',$5,$6)",[randomUUID(),projectId,"Project Brain version "+brainVersion,"Brain projection updated from the latest Builder requirement.",runId,brainVersion]);
   const providerAttemptId=randomUUID();
   await pool.query("INSERT INTO provider_attempts(id,project_id,run_id,kind,provider,capability,status,simulated) VALUES($1,$2,$3,'execution',$4,'source-build','running',false)",[providerAttemptId,projectId,runId,generation.provider||"http-executor"]);
   await pool.query("INSERT INTO ai_runs(id,project_id,prompt,provider,model,status,tokens_in,tokens_out) VALUES($1,$2,$3,$4,$5,'testing',$6,$7) ON CONFLICT(id) DO UPDATE SET status='testing'",[runId,projectId,prompt,generation.provider,generation.model,Number(generation.usage?.prompt_tokens||0),Number(generation.usage?.completion_tokens||0)]);
