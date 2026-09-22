@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
+import { buildAndPersist, repairAndBuild, latestSource, capabilities, ensureSchema } from "./forge-core.mjs";
 
 const PORT = Number(process.env.PORT || 8080);
 const WORKER_TOKEN = process.env.FORGEOS_WORKER_TOKEN || "";
@@ -88,27 +89,6 @@ function exec(command, args, cwd) {
   });
 }
 
-async function persist(job, sourceFiles = []) {
-  if (!pool) return;
-  await pool.query(
-    `INSERT INTO ai_events (id, run_id, type, payload, created_at)
-     VALUES ($1, $2, $3, $4::jsonb, NOW())
-     ON CONFLICT DO NOTHING`,
-    [
-      randomUUID(),
-      job.runId || null,
-      `worker_${job.phase}`,
-      JSON.stringify({
-        workerJobId: job.jobId,
-        state: job.state,
-        simulated: false,
-        error: job.error || null,
-        sourceFiles: sourceFiles.length ? sourceFiles : undefined,
-      }),
-    ]
-  ).catch(() => {});
-}
-
 async function execute(runId, files) {
   validateFiles(files);
   const jobId = randomUUID();
@@ -157,7 +137,6 @@ async function execute(runId, files) {
         simulated: false,
         install,
       };
-      await persist(result, files);
       return result;
     }
 
@@ -187,7 +166,6 @@ async function execute(runId, files) {
       },
     };
 
-    await persist(result);
     return result;
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -203,7 +181,45 @@ const server = http.createServer(async (req, res) => {
         realExecution: true,
         authenticatedExecution: Boolean(WORKER_TOKEN),
         databaseConfigured: Boolean(DATABASE_URL),
+        canonicalPersistence: true,
       });
+    }
+
+    if (req.method === "GET" && req.url === "/worker/capabilities") {
+      if (!authorized(req)) return json(res, 401, { error: "worker_auth_required" });
+      return json(res, 200, capabilities());
+    }
+
+    if (req.method === "POST" && req.url === "/worker/build") {
+      if (!authorized(req)) return json(res, 401, { error: "worker_auth_required" });
+      const payload = await body(req);
+      if (!payload.prompt || typeof payload.prompt !== "string") return json(res, 400, { error: "prompt_required" });
+      const result = await buildAndPersist(pool, {
+        runId: payload.runId || randomUUID(),
+        projectSlug: payload.projectSlug || "forgeos",
+        prompt: payload.prompt,
+        execute,
+      });
+      return json(res, result.state === "passed" ? 200 : 422, result);
+    }
+
+    if (req.method === "POST" && req.url === "/worker/repair") {
+      if (!authorized(req)) return json(res, 401, { error: "worker_auth_required" });
+      const payload = await body(req);
+      const result = await repairAndBuild({
+        runId: payload.runId || randomUUID(),
+        prompt: payload.prompt || "",
+        files: payload.files || [],
+        failure: payload.failure || "real build failed",
+        execute,
+      });
+      return json(res, result.state === "passed" ? 200 : 422, result);
+    }
+
+    if (req.method === "GET" && req.url === "/worker/source/latest") {
+      if (!authorized(req)) return json(res, 401, { error: "worker_auth_required" });
+      if (!pool) return json(res, 503, { error: "worker_database_not_configured" });
+      return json(res, 200, { files: await latestSource(pool) });
     }
 
     if (req.method === "POST" && req.url === "/worker/jobs") {
