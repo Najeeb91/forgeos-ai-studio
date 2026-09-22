@@ -95,6 +95,10 @@ export async function readProject(pool, slug) {
     "select id,run_id,level,stage,message,created_at from ai_events where run_id=any($1::uuid[]) order by created_at",
     [runIds]
   )).rows : [];
+  const audit = (await pool.query(
+    "select id,actor,actor_name,action,target,risk,approved,diff_summary,stage,created_at from audit_events where project_id=$1 order by created_at desc limit 200",
+    [p.id]
+  )).rows;
   const latest = (await pool.query(
     "select ss.id as snapshot_id,ss.created_at,sf.path,sf.language,sf.content from source_snapshots ss left join source_files sf on sf.snapshot_id=ss.id where ss.project_id=$1 order by ss.created_at desc,sf.path",
     [p.id]
@@ -113,7 +117,14 @@ export async function readProject(pool, slug) {
         status: run.status, startedAt: run.started_at, completedAt: run.completed_at,
         tokensIn: run.tokens_in || 0, tokensOut: run.tokens_out || 0,
         plan: steps.filter((s) => s.run_id === run.id),
-        events: events.filter((e) => e.run_id === run.id)
+        events: events.filter((e) => e.run_id === run.id).map((e) => ({
+          id: e.id, at: e.created_at, level: e.level, stage: e.stage, message: e.message
+        }))
+      })),
+      auditHistory: audit.map((e) => ({
+        id: e.id, at: e.created_at, actor: e.actor === "user" ? "human" : e.actor,
+        actorName: e.actor_name, action: e.action, target: e.target,
+        risk: e.risk, approved: e.approved, diffSummary: e.diff_summary, stage: e.stage
       })),
       generatedFiles: files,
       lastGeneratedAt: latestSnapshotId ? latest[0]?.created_at : null
