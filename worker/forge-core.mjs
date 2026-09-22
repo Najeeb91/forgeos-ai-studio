@@ -82,6 +82,10 @@ export async function readProject(pool, slug) {
   const projectResult = await pool.query("select * from projects where slug=$1 limit 1", [slug]);
   const p = projectResult.rows[0];
   if (!p) return null;
+  const contextEntries = (await pool.query(
+    "select id,kind,title,content,source,occurred_at from project_context_entries where project_id=$1 order by occurred_at desc",
+    [p.id]
+  )).rows;
   const brainRow = (await pool.query(
     "select vision,requirements,decisions,architecture,schema,integrations,version from project_brain_versions where project_id=$1 order by version desc limit 1",
     [p.id]
@@ -116,6 +120,10 @@ export async function readProject(pool, slug) {
       id: p.id, slug: p.slug, name: p.name, tagline: p.tagline, description: p.description,
       status: p.status, health: p.health, owner: p.owner, stack: p.stack || [],
       benchmark: Boolean(p.benchmark), createdAt: p.created_at, updatedAt: p.updated_at,
+      contextHistory: contextEntries.map((e) => ({
+        id: e.id, kind: e.kind, title: e.title, content: e.content,
+        source: e.source, occurredAt: e.occurred_at
+      })),
       brain: brainRow ? {
         vision: brainRow.vision,
         requirements: brainRow.requirements || [],
@@ -149,7 +157,7 @@ export async function readProject(pool, slug) {
 export async function ensureSchema(pool) {
   if (!pool) return;
   await pool.query(
-    'CREATE TABLE IF NOT EXISTS projects (id uuid PRIMARY KEY,slug varchar(255) UNIQUE NOT NULL,name varchar(255) NOT NULL,tagline text NOT NULL,description text NOT NULL,status varchar(50) NOT NULL,health varchar(50) NOT NULL,owner varchar(255) NOT NULL,stack jsonb NOT NULL,benchmark boolean DEFAULT false,preview_route varchar(255),preview_status varchar(50),preview_last_built_at timestamptz,created_at timestamptz DEFAULT now() NOT NULL,updated_at timestamptz DEFAULT now() NOT NULL);'+
+    'CREATE TABLE IF NOT EXISTS project_context_entries (id uuid PRIMARY KEY,project_id uuid NOT NULL REFERENCES projects(id) ON DELETE CASCADE,kind varchar(50) NOT NULL,title varchar(255) NOT NULL,content text NOT NULL,source varchar(100) NOT NULL,occurred_at timestamptz NOT NULL,created_at timestamptz DEFAULT now() NOT NULL);'+'CREATE TABLE IF NOT EXISTS projects (id uuid PRIMARY KEY,slug varchar(255) UNIQUE NOT NULL,name varchar(255) NOT NULL,tagline text NOT NULL,description text NOT NULL,status varchar(50) NOT NULL,health varchar(50) NOT NULL,owner varchar(255) NOT NULL,stack jsonb NOT NULL,benchmark boolean DEFAULT false,preview_route varchar(255),preview_status varchar(50),preview_last_built_at timestamptz,created_at timestamptz DEFAULT now() NOT NULL,updated_at timestamptz DEFAULT now() NOT NULL);'+
     'CREATE TABLE IF NOT EXISTS project_brain_versions (id uuid PRIMARY KEY,project_id uuid NOT NULL REFERENCES projects(id) ON DELETE CASCADE,version integer NOT NULL,vision text NOT NULL,requirements jsonb NOT NULL,decisions jsonb NOT NULL,architecture jsonb NOT NULL,"schema" jsonb NOT NULL,integrations jsonb NOT NULL,created_at timestamptz DEFAULT now() NOT NULL);'+
     'CREATE TABLE IF NOT EXISTS pipeline_stages (id uuid PRIMARY KEY,project_id uuid NOT NULL REFERENCES projects(id) ON DELETE CASCADE,stage_id varchar(50) NOT NULL,label varchar(100) NOT NULL,status varchar(50) NOT NULL,summary text NOT NULL,progress integer NOT NULL,updated_at timestamptz DEFAULT now() NOT NULL);'+
     'CREATE TABLE IF NOT EXISTS source_snapshots (id uuid PRIMARY KEY,project_id uuid NOT NULL REFERENCES projects(id) ON DELETE CASCADE,commit_sha varchar(255),message text,created_at timestamptz DEFAULT now() NOT NULL);'+
@@ -165,6 +173,24 @@ export async function ensureSchema(pool) {
   );
 }
 
+async function seedRecoveredContext(pool, projectId) {
+  const count = await pool.query("select count(*)::int as count from project_context_entries where project_id=$1",[projectId]);
+  if (count.rows[0].count > 0) return;
+  const entries = [
+    ["milestone","ForgeOS named and product thesis locked","ForgeOS was selected as the independent Universal AI Software Factory. Core flow: natural language idea → durable Project Brain → requirements/plan → approval gates → generated source → preview → tests/repair → deployment, with auditable history.","recovered-project-context","2026-09-20T00:00:00Z"],
+    ["architecture","GitHub as canonical source of truth","The project uses a toolbox architecture and avoids permanent dependence on any single builder. GitHub is the canonical source; builders and services are resources around it.","recovered-project-context","2026-09-20T12:00:00Z"],
+    ["architecture","Control plane and worker separation","The control plane owns runs, approvals, state transitions, snapshots, audit and deployment reconciliation. The Railway worker performs bounded installation/build/execution, cancellation/timeouts and reports observations.","recovered-project-context","2026-09-21T18:18:16Z"],
+    ["decision","Execution lifecycle locked","Lifecycle: DRAFT → PLANNING → AWAITING_APPROVAL → EXECUTING → TESTING → REVIEW → DEPLOYING → COMPLETED; failure enters REPAIRING and cancellation enters CANCELLED.","recovered-project-context","2026-09-21T18:29:42Z"],
+    ["decision","Provider-agnostic AI","ForgeOS should route AI work through provider adapters rather than hard-code one AI vendor. Generation, review and repair remain separable task classes.","recovered-project-context","2026-09-21T18:00:00Z"],
+    ["constraint","Human approval for high-risk actions","Destructive or high-risk source, data, credential, infrastructure and production actions require explicit human approval and an auditable decision.","recovered-project-context","2026-09-20T12:30:00Z"],
+    ["milestone","Railway execution foundation live","The canonical repository has a Railway web service and private execution worker. Real source build execution and persistence are implemented; simulated results must never be represented as real execution.","recovered-project-context","2026-09-22T00:00:00Z"],
+    ["decision","Consolidation direction","AppDeploy is the feature reference, Lovable is the product/UI reference, Hatchable is an architecture reference, while GitHub + Railway + Neon form the engineering foundation. Duplicate ForgeOS projects and unnecessary builder usage are avoided.","recovered-project-context","2026-09-21T23:00:00Z"]
+  ];
+  for (const [kind,title,content,source,occurredAt] of entries) {
+    await pool.query("insert into project_context_entries(id,project_id,kind,title,content,source,occurred_at) values($1,$2,$3,$4,$5,$6,$7)",[randomUUID(),projectId,kind,title,content,source,occurredAt]);
+  }
+}
+
 async function ensureProject(pool, slug, prompt) {
   const id=randomUUID();
   const name=slug==="forgeos"?"ForgeOS":slug.replace(/[-_]+/g," ").replace(/\b\w/g,(m)=>m.toUpperCase());
@@ -172,7 +198,7 @@ async function ensureProject(pool, slug, prompt) {
     "INSERT INTO projects(id,slug,name,tagline,description,status,health,owner,stack,benchmark) VALUES($1,$2,$3,$4,$5,'building','healthy','forgeos',$6::jsonb,false) ON CONFLICT(slug) DO UPDATE SET updated_at=now() RETURNING id",
     [id,slug,name,"AI software factory","Project managed by ForgeOS. Initial requirement: "+String(prompt).slice(0,1000),JSON.stringify(["React","TypeScript","Vite"])]
   );
-  return r.rows[0].id;
+  const projectId = r.rows[0].id;\n  await seedRecoveredContext(pool, projectId);\n  return projectId;
 }
 
 async function recordPlan(pool,runId) {
