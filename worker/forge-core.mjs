@@ -269,6 +269,15 @@ async function recordPlan(pool,runId) {
 async function recordBuild(pool,{runId,projectSlug,prompt,artifacts,result,generation}) {
   if(!pool) return null;
   const projectId=await ensureProject(pool,projectSlug||"forgeos",prompt);
+  let conversationId=(await pool.query("SELECT id FROM conversations WHERE project_id=$1 ORDER BY updated_at DESC LIMIT 1",[projectId])).rows[0]?.id;
+  if(!conversationId){
+    conversationId=randomUUID();
+    await pool.query("INSERT INTO conversations(id,project_id,title) VALUES($1,$2,$3)",[conversationId,projectId,"ForgeOS Project Conversation"]);
+  }
+  await pool.query("INSERT INTO conversation_messages(id,conversation_id,role,content,run_id) VALUES($1,$2,'user',$3,$4)",[randomUUID(),conversationId,prompt,runId]);
+  await pool.query("INSERT INTO project_memory_entries(id,project_id,kind,title,content,author_type,source,provenance_run_id) VALUES($1,$2,'requirement',$3,$4,'user','builder',$5)",[randomUUID(),projectId,"Builder requirement",prompt,runId]);
+  const providerAttemptId=randomUUID();
+  await pool.query("INSERT INTO provider_attempts(id,project_id,run_id,kind,provider,capability,status,simulated) VALUES($1,$2,$3,'execution',$4,'source-build','running',false)",[providerAttemptId,projectId,runId,result.provider||"http-executor"]);
   await pool.query("INSERT INTO ai_runs(id,project_id,prompt,provider,model,status,tokens_in,tokens_out) VALUES($1,$2,$3,$4,$5,'testing',$6,$7) ON CONFLICT(id) DO UPDATE SET status='testing'",[runId,projectId,prompt,generation.provider,generation.model,Number(generation.usage?.prompt_tokens||0),Number(generation.usage?.completion_tokens||0)]);
   await recordPlan(pool,runId);
   await pool.query("INSERT INTO ai_events(id,run_id,level,stage,message) VALUES($1,$2,'info','brain',$3)",[randomUUID(),runId,"Requirement accepted by ForgeOS."]);
@@ -283,6 +292,14 @@ async function recordBuild(pool,{runId,projectSlug,prompt,artifacts,result,gener
   await pool.query("INSERT INTO ai_events(id,run_id,level,stage,message) VALUES($1,$2,$3,'test',$4)",[randomUUID(),runId,passed?"info":"error",passed?"Real build verification passed.":"Real build verification failed during "+result.phase+"."]);
   await pool.query("INSERT INTO audit_events(id,project_id,actor,actor_name,action,target,risk,approved,diff_summary,stage) VALUES($1,$2,'system','ForgeOS',$3,$4,'low',NULL,$5,'test')",[randomUUID(),projectId,passed?"real_build_passed":"real_build_failed",runId,result.error||result.phase]);
   await pool.query("UPDATE ai_runs SET status=$2,completed_at=now() WHERE id=$1",[runId,passed?"review":"repairing"]);
+  await pool.query("UPDATE provider_attempts SET status=$1,completed_at=now(),job_id=$2,error=$3,observations=$4::jsonb WHERE id=$5",[
+    passed ? "succeeded" : "failed",
+    result.jobId || null,
+    result.error || result.build?.error || result.install?.error || null,
+    JSON.stringify({phase:result.phase || null, state:result.state || null, generationMode:generation.mode, provider:generation.provider, model:generation.model}),
+    providerAttemptId
+  ]);
+  await pool.query("UPDATE conversations SET updated_at=now() WHERE id=$1",[conversationId]);
   return {projectId,snapshotId};
 }
 
