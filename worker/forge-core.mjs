@@ -82,6 +82,10 @@ export async function readProject(pool, slug) {
   const projectResult = await pool.query("select * from projects where slug=$1 limit 1", [slug]);
   const p = projectResult.rows[0];
   if (!p) return null;
+  const brainRow = (await pool.query(
+    "select vision,requirements,decisions,architecture,schema,integrations,version from project_brain_versions where project_id=$1 order by version desc limit 1",
+    [p.id]
+  )).rows[0];
   const runs = (await pool.query(
     "select id,prompt,provider,model,status,started_at,completed_at,tokens_in,tokens_out from ai_runs where project_id=$1 order by started_at desc limit 20",
     [p.id]
@@ -112,6 +116,16 @@ export async function readProject(pool, slug) {
       id: p.id, slug: p.slug, name: p.name, tagline: p.tagline, description: p.description,
       status: p.status, health: p.health, owner: p.owner, stack: p.stack || [],
       benchmark: Boolean(p.benchmark), createdAt: p.created_at, updatedAt: p.updated_at,
+      brain: brainRow ? {
+        vision: brainRow.vision,
+        requirements: brainRow.requirements || [],
+        decisions: brainRow.decisions || [],
+        architecture: brainRow.architecture || [],
+        schema: brainRow.schema || [],
+        integrations: brainRow.integrations || [],
+        tests: [],
+        history: []
+      } : undefined,
       runs: runs.map((run) => ({
         id: run.id, prompt: run.prompt, provider: run.provider, model: run.model,
         status: run.status, startedAt: run.started_at, completedAt: run.completed_at,
