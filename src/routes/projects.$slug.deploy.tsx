@@ -3,7 +3,7 @@ import { AlertTriangle, ExternalLink, RotateCcw } from "lucide-react";
 
 import { PageBody, Panel } from "@/components/forge/shell";
 import { Pill } from "@/components/forge/status";
-import { getProject } from "@/lib/forge/data";
+import { useForgeProject } from "@/lib/forge/use-project";
 
 export const Route = createFileRoute("/projects/$slug/deploy")({
   component: Deploy,
@@ -11,7 +11,7 @@ export const Route = createFileRoute("/projects/$slug/deploy")({
 
 function Deploy() {
   const { slug } = Route.useParams();
-  const project = getProject(slug)!;
+  const project = useForgeProject();
 
   return (
     <PageBody>
