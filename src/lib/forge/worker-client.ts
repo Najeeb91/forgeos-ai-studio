@@ -13,9 +13,9 @@ export async function executeBuild(runId:string,projectSlug:string,prompt:string
   return payload;
 }
 
-export async function getLatestGeneratedSource():Promise<WorkerSourceFile[]>{
+export async function getLatestGeneratedSource(projectSlug:string):Promise<WorkerSourceFile[]>{
   const {url,token}=workerConfig();
-  const response=await fetch(`${url}/worker/source/latest`,{headers:{authorization:`Bearer ${token}`}});
+  const response=await fetch(`${url}/worker/source/latest`,{headers:{authorization:`Bearer ${token}`,"x-forgeos-project-slug":projectSlug}});
   const text=await response.text();
   if(!response.ok)throw new Error(`Generated source lookup failed (HTTP ${response.status})`);
   const payload=JSON.parse(text) as {files?:WorkerSourceFile[]};
