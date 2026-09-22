@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { projects as seedProjects, providerRegistry } from "./data";
+import { projects as seedProjects } from "./data";
 import { getProjectFromWorker } from "./worker-client";
 import { listForgeProviders as listConfiguredProviders } from "./provider-routing";
 
