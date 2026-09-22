@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { projects as seedProjects, providerRegistry } from "./data";
 import { getProjectFromWorker } from "./worker-client";
+import { listForgeProviders as listConfiguredProviders } from "./provider-routing";
 
 export const getForgeProject = createServerFn({ method: "GET" })
   .validator((slug: string) => slug)
@@ -24,6 +25,6 @@ export const listForgeProjects = createServerFn({ method: "GET" }).handler(async
 });
 
 export const listForgeProviders = createServerFn({ method: "GET" }).handler(async () => ({
-  providers: providerRegistry,
+  providers: listConfiguredProviders(),
   source: "seed" as const,
 }));
