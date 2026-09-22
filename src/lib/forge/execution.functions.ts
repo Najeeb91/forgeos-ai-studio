@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { executeBuild, getLatestGeneratedSource } from "./worker-client";
 
-const buildInput=z.object({runId:z.string().min(1),prompt:z.string().trim().min(1).max(4000)});
+const buildInput=z.object({runId:z.string().min(1),projectSlug:z.string().min(1).max(255),prompt:z.string().trim().min(1).max(4000)});
 
 function generatedSource(prompt:string){
   const safePrompt=prompt.replace(/</g,"&lt;").replace(/>/g,"&gt;").slice(0,1200);
@@ -18,7 +18,7 @@ function generatedSource(prompt:string){
 
 export const runForgeBuild=createServerFn({method:"POST"}).validator(buildInput).handler(async({data})=>{
   const files=generatedSource(data.prompt);
-  const result=await executeBuild(data.runId,files);
-  return {...result,sourceFileCount:files.length,sourceFiles:files.map(f=>f.path),generationMode:"deterministic-v3"};
+  const result=await executeBuild(data.runId,data.projectSlug,data.prompt);
+  return {...result,sourceFileCount:result.sourceFiles?.length ?? 0,sourceFiles:result.sourceFiles?.map(f=>f.path) ?? [],generationMode:result.generationMode ?? "unknown",provider:result.provider ?? "unknown",model:result.model ?? "unknown"};
 });
 export const getLatestGeneratedApp=createServerFn({method:"GET"}).handler(async()=>getLatestGeneratedSource());
