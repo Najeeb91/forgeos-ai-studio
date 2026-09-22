@@ -13,7 +13,7 @@ function aiConfig() {
 export function capabilities() {
   const c = aiConfig();
   return {
-    ai: { configured: Boolean(c.apiKey), provider: c.provider, model: c.model, fallback: "disabled" },
+    ai: { configured: Boolean(c.apiKey), provider: c.provider, model: c.model, fallback: "explicit-template-only" },
     realExecution: true,
     repair: { available: Boolean(c.apiKey), bounded: true },
     persistence: { canonicalSchema: true, migrations: true },
@@ -57,7 +57,7 @@ function validateArtifacts(artifacts) {
 
 async function aiGenerate(prompt) {
   const c = aiConfig();
-  if (!c.apiKey) throw new Error("ai_provider_not_configured");
+  if (!c.apiKey) return { artifacts: deterministicArtifacts(prompt), mode:"template", provider:"local-template", model:"deterministic-template-v5", usage:{} };
   const response = await fetch(c.baseUrl+"/chat/completions", {
     method:"POST",
     headers:{"content-type":"application/json",authorization:"Bearer "+c.apiKey},
