@@ -1,18 +1,29 @@
 import { createServerFn } from "@tanstack/react-start";
 import { projects as seedProjects, providerRegistry } from "./data";
-import { getRemoteProject, listRemoteProjects } from "@/server/db/repository";
+import { getProjectFromWorker } from "./worker-client";
 
 export const getForgeProject = createServerFn({ method: "GET" })
   .validator((slug: string) => slug)
   .handler(async ({ data: slug }) => {
-    try { const project = await getRemoteProject(slug); if (project) return { project, source: "remote" as const }; } catch {}
-    const project = seedProjects.find((p) => p.slug === slug);
-    return project ? { project, source: "seed" as const } : null;
+    const seed = seedProjects.find((p) => p.slug === slug);
+    try {
+      const remote = await getProjectFromWorker(slug);
+      if (remote?.project) return { project: { ...seed, ...remote.project } as typeof seed, source: "remote" as const };
+    } catch {}
+    return seed ? { project: seed, source: "seed" as const } : null;
   });
 
 export const listForgeProjects = createServerFn({ method: "GET" }).handler(async () => {
-  try { const projects = await listRemoteProjects(); if (projects?.length) return { projects, source: "remote" as const }; } catch {}
-  return { projects: seedProjects, source: "seed" as const };
+  const results = await Promise.all(seedProjects.map(async (seed) => {
+    try {
+      const remote = await getProjectFromWorker(seed.slug);
+      return remote?.project ? ({ ...seed, ...remote.project } as typeof seed) : seed;
+    } catch { return seed; }
+  }));
+  return { projects: results, source: results.some((p, i) => p !== seedProjects[i]) ? "remote" as const : "seed" as const };
 });
 
-export const listForgeProviders = createServerFn({ method: "GET" }).handler(async () => ({ providers: providerRegistry, source: "seed" as const }));
+export const listForgeProviders = createServerFn({ method: "GET" }).handler(async () => ({
+  providers: providerRegistry,
+  source: "seed" as const,
+}));
