@@ -6,7 +6,6 @@ const input=z.object({runId:z.string().min(1),projectSlug:z.string().min(1),envi
 export const releaseForgeProject=createServerFn({method:"POST"})
   .validator(input)
   .handler(async({data})=>{
-    const { executeBuild } = await import("./worker-client");
     // Reuse the server-side worker configuration without exposing credentials to the browser.
     const { url, token } = (()=>{ const u=process.env.FORGEOS_EXECUTOR_URL||process.env.FORGEOS_WORKER_URL; const t=process.env.FORGEOS_WORKER_TOKEN; if(!u)throw new Error("FORGEOS_EXECUTOR_URL is not configured"); if(!t)throw new Error("FORGEOS_WORKER_TOKEN is not configured"); return {url:u.replace(/\/$/,""),token:t}; })();
     const response=await fetch(`${url}/worker/deploy`,{method:"POST",headers:{"content-type":"application/json",authorization:`Bearer ${token}`},body:JSON.stringify(data)});
