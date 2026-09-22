@@ -34,3 +34,10 @@ If the selected provider becomes unavailable, ForgeOS should select another conf
 - Never make one provider required for normal project portability.
 - Provider credentials are optional configuration.
 - Provider failure changes routing, not project architecture.
+
+## Current shipped status (2026-09-22)
+- Provider registry: shipped.
+- Portable GitHub Actions workflow: shipped and independently usable as a CI/build plane.
+- Durable provider-attempt records: shipped.
+- Automatic per-run failover: **not yet shipped**; do not represent the standby GitHub workflow as automatic failover.
+- Railway: current execution host adapter, but not a product dependency.
