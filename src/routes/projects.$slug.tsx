@@ -2,22 +2,22 @@ import { createFileRoute, Link, Outlet, notFound } from "@tanstack/react-router"
 
 import { PageHeader, WorkspaceShell } from "@/components/forge/shell";
 import { Dot, Pill } from "@/components/forge/status";
-import { getProject } from "@/lib/forge/data";
+import { getForgeProject } from "@/lib/forge/remote.functions";
 
 export const Route = createFileRoute("/projects/$slug")({
-  loader: ({ params }) => {
-    const project = getProject(params.slug);
-    if (!project) throw notFound();
-    return { name: project.name, tagline: project.tagline };
+  loader: async ({ params }) => {
+    const result = await getForgeProject({ data: params.slug });
+    if (!result) throw notFound();
+    return result;
   },
   head: ({ loaderData }) => ({
     meta: [
-      { title: loaderData ? `${loaderData.name} — ForgeOS` : "Project — ForgeOS" },
+      { title: loaderData ? `${loaderData.project.name} — ForgeOS` : "Project — ForgeOS" },
       {
         name: "description",
-        content: loaderData?.tagline ?? "A ForgeOS project workspace.",
+        content: loaderData?.project.tagline ?? "A ForgeOS project workspace.",
       },
-      { property: "og:title", content: loaderData ? `${loaderData.name} — ForgeOS` : "ForgeOS" },
+      { property: "og:title", content: loaderData ? `${loaderData.project.name} — ForgeOS` : "ForgeOS" },
       { property: "og:description", content: loaderData?.tagline ?? "A ForgeOS project workspace." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -40,8 +40,8 @@ const tabs = [
 ] as const;
 
 function ProjectLayout() {
+  const { project } = Route.useLoaderData();
   const { slug } = Route.useParams();
-  const project = getProject(slug)!;
 
   return (
     <WorkspaceShell>
