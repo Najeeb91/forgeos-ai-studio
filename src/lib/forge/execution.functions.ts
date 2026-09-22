@@ -21,4 +21,4 @@ export const runForgeBuild=createServerFn({method:"POST"}).validator(buildInput)
   const result=await executeBuild(data.runId,data.projectSlug,data.prompt);
   return {...result,sourceFileCount:result.sourceFiles?.length ?? 0,sourceFiles:result.sourceFiles?.map(f=>f.path) ?? [],generationMode:result.generationMode ?? "unknown",provider:result.provider ?? "unknown",model:result.model ?? "unknown"};
 });
-export const getLatestGeneratedApp=createServerFn({method:"GET"}).handler(async()=>getLatestGeneratedSource());
+export const getLatestGeneratedApp=createServerFn({method:"GET"}).validator(z.object({projectSlug:z.string().min(1).max(255)})).handler(async({data})=>getLatestGeneratedSource(data.projectSlug));
