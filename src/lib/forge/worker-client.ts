@@ -5,7 +5,7 @@ function workerConfig(){const url=process.env.FORGEOS_WORKER_URL;const token=pro
 
 export async function executeBuild(runId:string,projectSlug:string,prompt:string):Promise<WorkerBuildResponse>{
   const {url,token}=workerConfig();
-  const response=await fetch(`${url}/worker/jobs`,{method:"POST",headers:{"content-type":"application/json",authorization:`Bearer ${token}`},body:JSON.stringify({runId,projectSlug,prompt})});
+  const response=await fetch(`${url}/worker/build`,{method:"POST",headers:{"content-type":"application/json",authorization:`Bearer ${token}`},body:JSON.stringify({runId,projectSlug,prompt})});
   const text=await response.text();let payload:WorkerBuildResponse;
   try{payload=JSON.parse(text) as WorkerBuildResponse}catch{throw new Error(`Execution worker returned invalid JSON (HTTP ${response.status})`);}
   if(!response.ok)throw new Error(payload.error||payload.build?.stderr||payload.install?.stderr||`Execution worker failed with HTTP ${response.status}`);
