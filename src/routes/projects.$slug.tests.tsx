@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { PageBody, Panel } from "@/components/forge/shell";
 import { DataTable, FilterBar, ProvenanceBadge, StatGrid } from "@/components/forge/primitives";
 import { Pill } from "@/components/forge/status";
-import { readProjectSync } from "@/lib/forge/repository";
+import { useForgeProject } from "@/lib/forge/use-project";
 import { testTone } from "@/lib/forge/tone";
 import type { TestCase } from "@/lib/forge/types";
 
@@ -28,7 +28,7 @@ type SuiteFilter = "all" | TestCase["suite"];
 
 function Tests() {
   const { slug } = Route.useParams();
-  const project = readProjectSync(slug)!;
+  const project = useForgeProject();
   const tests = project.brain.tests;
 
   const [status, setStatus] = useState<StatusFilter>("all");
