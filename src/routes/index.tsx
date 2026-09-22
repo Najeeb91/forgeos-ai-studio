@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { PageBody, PageHeader, Panel, WorkspaceShell } from "@/components/forge/shell";
 import { StageRail } from "@/components/forge/stage-rail";
 import { Dot, Pill } from "@/components/forge/status";
-import { projects } from "@/lib/forge/data";
+import { listForgeProjects } from "@/lib/forge/remote.functions";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -25,10 +25,12 @@ export const Route = createFileRoute("/")({
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
+  loader: () => listForgeProjects(),
   component: Workspace,
 });
 
 function Workspace() {
+  const { projects } = Route.useLoaderData();
   const approvals = projects.flatMap((p) =>
     p.stages.filter((s) => s.status === "needs_approval").map((s) => ({ project: p, stage: s })),
   );
