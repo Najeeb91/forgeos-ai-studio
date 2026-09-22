@@ -82,6 +82,7 @@ export async function readProject(pool, slug) {
   const projectResult = await pool.query("select * from projects where slug=$1 limit 1", [slug]);
   const p = projectResult.rows[0];
   if (!p) return null;
+  await seedRecoveredContext(pool, p.id);
   const contextEntries = (await pool.query(
     "select id,kind,title,content,source,occurred_at from project_context_entries where project_id=$1 order by occurred_at desc",
     [p.id]
