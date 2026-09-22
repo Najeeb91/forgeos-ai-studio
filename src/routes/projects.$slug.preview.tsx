@@ -19,7 +19,7 @@ function Preview() {
 
   useEffect(()=>{
     let active=true;
-    getLatestGeneratedApp({}).then(files=>{
+    getLatestGeneratedApp({data:{projectSlug:slug}}).then(files=>{
       if(!active||!files.length)return;
       const index=files.find(f=>f.path==="index.html")?.content??"";
       const main=files.find(f=>f.path==="src/main.js")?.content??"";
