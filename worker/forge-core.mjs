@@ -87,6 +87,30 @@ export async function readProject(pool, slug) {
     "select id,kind,title,content,source,occurred_at from project_context_entries where project_id=$1 order by occurred_at desc",
     [p.id]
   )).rows;
+  const memory = (await pool.query(
+    "select id,kind,title,content,author_type,author_id,source,occurred_at,supersedes_id from project_memory_entries where project_id=$1 and status='active' order by occurred_at desc limit 200",
+    [p.id]
+  )).rows;
+  const conversation = (await pool.query(
+    "select id,title from conversations where project_id=$1 order by updated_at desc limit 1",
+    [p.id]
+  )).rows[0];
+  const messages = conversation ? (await pool.query(
+    "select id,role,content,created_at from conversation_messages where conversation_id=$1 order by created_at",
+    [conversation.id]
+  )).rows : [];
+  const approvals = (await pool.query(
+    "select id,run_id,step_id,action_type,target,reason,risk,status,actor_id,decision_reason,created_at,decided_at from approval_requests where project_id=$1 order by created_at desc limit 100",
+    [p.id]
+  )).rows;
+  const providerAttempts = (await pool.query(
+    "select id,run_id,kind,provider,capability,status,priority,job_id,simulated,error,started_at,completed_at from provider_attempts where project_id=$1 order by started_at desc limit 100",
+    [p.id]
+  )).rows;
+  const deploymentHistory = (await pool.query(
+    "select id,env,status,commit_sha,url,adapter,created_at from deployments where project_id=$1 order by created_at desc limit 100",
+    [p.id]
+  )).rows;
   const brainRow = (await pool.query(
     "select vision,requirements,decisions,architecture,schema,integrations,version from project_brain_versions where project_id=$1 order by version desc limit 1",
     [p.id]
@@ -124,6 +148,31 @@ export async function readProject(pool, slug) {
       contextHistory: contextEntries.map((e) => ({
         id: e.id, kind: e.kind, title: e.title, content: e.content,
         source: e.source, occurredAt: e.occurred_at
+      })),
+      memory: memory.map((e) => ({
+        id:e.id, kind:e.kind, title:e.title, content:e.content,
+        authorType:e.author_type, authorId:e.author_id, source:e.source,
+        occurredAt:e.occurred_at, supersedesId:e.supersedes_id
+      })),
+      approvals: approvals.map((a) => ({
+        id:a.id, runId:a.run_id, stepId:a.step_id, actionType:a.action_type,
+        target:a.target, reason:a.reason, risk:a.risk, status:a.status,
+        actorId:a.actor_id, decisionReason:a.decision_reason,
+        createdAt:a.created_at, decidedAt:a.decided_at
+      })),
+      providerAttempts: providerAttempts.map((a) => ({
+        id:a.id, runId:a.run_id, kind:a.kind, provider:a.provider,
+        capability:a.capability, status:a.status, priority:a.priority,
+        jobId:a.job_id, simulated:a.simulated, error:a.error,
+        startedAt:a.started_at, completedAt:a.completed_at
+      })),
+      conversation: conversation ? {
+        id:conversation.id, title:conversation.title,
+        messages:messages.map((m) => ({id:m.id,role:m.role,content:m.content,createdAt:m.created_at}))
+      } : undefined,
+      deploymentHistory: deploymentHistory.map((d) => ({
+        id:d.id, env:d.env, status:d.status, commit:d.commit_sha || "",
+        url:d.url, at:d.created_at, adapter:d.adapter
       })),
       brain: brainRow ? {
         vision: brainRow.vision,
