@@ -1,7 +1,7 @@
 export type WorkerSourceFile={path:string;content:string};
 export type WorkerBuildResponse={ok?:boolean;jobId:string;runId:string|null;state:"passed"|"failed";phase:string;simulated:false;artifact?:{type:string;path:string}|null;install?:any;build?:any;policy?:any;error?:string;generationMode?:string;provider?:string;model?:string;sourceFiles?:WorkerSourceFile[];projectId?:string|null;snapshotId?:string|null};
 
-function workerConfig(){const url=process.env.FORGEOS_WORKER_URL;const token=process.env.FORGEOS_WORKER_TOKEN;if(!url)throw new Error("FORGEOS_WORKER_URL is not configured");if(!token)throw new Error("FORGEOS_WORKER_TOKEN is not configured");return{url:url.replace(/\/$/,""),token};}
+function workerConfig(){const url=process.env.FORGEOS_EXECUTOR_URL || process.env.FORGEOS_WORKER_URL;const token=process.env.FORGEOS_WORKER_TOKEN;if(!url)throw new Error("FORGEOS_EXECUTOR_URL is not configured");if(!token)throw new Error("FORGEOS_WORKER_TOKEN is not configured");return{url:url.replace(/\/$/,""),token};}
 
 export async function executeBuild(runId:string,projectSlug:string,prompt:string):Promise<WorkerBuildResponse>{
   const {url,token}=workerConfig();
