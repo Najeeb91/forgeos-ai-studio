@@ -173,6 +173,10 @@ export async function readProject(pool, slug) {
         id:conversation.id, title:conversation.title,
         messages:messages.map((m) => ({id:m.id,role:m.role,content:m.content,createdAt:m.created_at}))
       } : undefined,
+      deployments: deploymentHistory.map((d) => ({
+        id:d.id, env:d.env, status:d.status, commit:d.commit_sha || "",
+        url:d.url, at:d.created_at, adapter:d.adapter
+      })),
       deploymentHistory: deploymentHistory.map((d) => ({
         id:d.id, env:d.env, status:d.status, commit:d.commit_sha || "",
         url:d.url, at:d.created_at, adapter:d.adapter
