@@ -224,13 +224,6 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { project });
     }
 
-    if (req.method === "GET" && req.url.startsWith("/worker/project/")) {
-      if (!authorized(req)) return json(res, 401, { error: "worker_auth_required" });
-      if (!pool) return json(res, 503, { error: "worker_database_not_configured" });
-      const slug = decodeURIComponent(req.url.slice("/worker/project/".length));
-      return json(res, 200, await readProject(pool, slug) || { project: null });
-    }
-
     if (req.method === "GET" && req.url === "/worker/source/latest") {
       if (!authorized(req)) return json(res, 401, { error: "worker_auth_required" });
       if (!pool) return json(res, 503, { error: "worker_database_not_configured" });
@@ -246,16 +239,6 @@ const server = http.createServer(async (req, res) => {
       const result = await execute(payload.runId || null, payload.files || []);
 
       return json(res, result.state === "passed" ? 200 : 422, result);
-    }
-
-    if (req.method === "GET" && req.url === "/worker/source/latest") {
-      if (!authorized(req)) return json(res, 401, { error: "worker_auth_required" });
-      if (!pool) return json(res, 503, { error: "worker_database_not_configured" });
-      const result = await pool.query(
-        `SELECT payload FROM ai_events WHERE type='worker_build' ORDER BY created_at DESC LIMIT 1`
-      );
-      const payload = result.rows[0]?.payload || {};
-      return json(res, 200, { files: Array.isArray(payload.sourceFiles) ? payload.sourceFiles : [] });
     }
 
     if (req.method === "POST" && req.url === "/worker/jobs/cancel") {
@@ -277,6 +260,14 @@ const server = http.createServer(async (req, res) => {
     });
   }
 });
+
+if (pool) {
+  ensureSchema(pool).then(() => {
+    console.log(JSON.stringify({ service: "forgeos-execution-worker", databaseSchema: "ready" }));
+  }).catch((error) => {
+    console.error(JSON.stringify({ service: "forgeos-execution-worker", databaseSchema: "failed", error: error instanceof Error ? error.message : String(error) }));
+  });
+}
 
 server.listen(PORT, "0.0.0.0", () => {
   console.log(JSON.stringify({
