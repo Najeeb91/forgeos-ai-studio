@@ -54,7 +54,7 @@ function validateArtifacts(artifacts) {
 
 async function aiGenerate(prompt) {
   const c = aiConfig();
-  if (!c.apiKey) return { artifacts: deterministicArtifacts(prompt), mode:"deterministic-fallback", provider:"deterministic", model:"deterministic-v4", usage:{} };
+  if (!c.apiKey) throw new Error("ai_provider_not_configured");
   const response = await fetch(c.baseUrl+"/chat/completions", {
     method:"POST",
     headers:{"content-type":"application/json",authorization:"Bearer "+c.apiKey},
@@ -205,11 +205,13 @@ async function ensureProject(pool, slug, prompt) {
 }
 
 async function recordPlan(pool,runId) {
+  const existing=await pool.query("SELECT count(*)::int AS count FROM ai_run_steps WHERE run_id=$1",[runId]);
+  if(Number(existing.rows[0]?.count||0)>0) return;
   const steps=[
     ["Understand requirement","Read the requirement and current project context.","brain","low","done"],
     ["Draft implementation plan","Translate the requirement into a bounded source change.","plan","low","done"],
-    ["Generate source","Produce a coherent runnable source tree.","build","low","done"],
-    ["Real build verification","Install dependencies under policy and run the allowed build command.","test","low","running"],
+    ["Generate source","Produce a coherent runnable source tree.","build","medium","pending"],
+    ["Real build verification","Install dependencies under policy and run the allowed build command.","test","high","awaiting_approval"],
     ["Review result","Record artifacts, tests, and audit evidence.","review","low","pending"]
   ];
   for(let i=0;i<steps.length;i++){const s=steps[i];await pool.query("INSERT INTO ai_run_steps(id,run_id,title,detail,stage,risk,status,order_idx) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",[randomUUID(),runId,...s,i]);}
@@ -217,7 +219,6 @@ async function recordPlan(pool,runId) {
 
 async function recordBuild(pool,{runId,projectSlug,prompt,artifacts,result,generation}) {
   if(!pool) return null;
-  await ensureSchema(pool);
   const projectId=await ensureProject(pool,projectSlug||"forgeos",prompt);
   await pool.query("INSERT INTO ai_runs(id,project_id,prompt,provider,model,status,tokens_in,tokens_out) VALUES($1,$2,$3,$4,$5,'testing',$6,$7) ON CONFLICT(id) DO UPDATE SET status='testing'",[runId,projectId,prompt,generation.provider,generation.model,Number(generation.usage?.prompt_tokens||0),Number(generation.usage?.completion_tokens||0)]);
   await recordPlan(pool,runId);
