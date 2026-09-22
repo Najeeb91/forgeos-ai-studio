@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
-import { buildAndPersist, repairAndBuild, latestSource, capabilities, ensureSchema } from "./forge-core.mjs";
+import { buildAndPersist, repairAndBuild, latestSource, capabilities, ensureSchema, readProject } from "./forge-core.mjs";
 
 const PORT = Number(process.env.PORT || 8080);
 const WORKER_TOKEN = process.env.FORGEOS_WORKER_TOKEN || "";
@@ -222,6 +222,13 @@ const server = http.createServer(async (req, res) => {
       const slug = decodeURIComponent(req.url.slice("/worker/project/".length));
       const project = await readProject(pool, slug);
       return json(res, 200, { project });
+    }
+
+    if (req.method === "GET" && req.url.startsWith("/worker/project/")) {
+      if (!authorized(req)) return json(res, 401, { error: "worker_auth_required" });
+      if (!pool) return json(res, 503, { error: "worker_database_not_configured" });
+      const slug = decodeURIComponent(req.url.slice("/worker/project/".length));
+      return json(res, 200, { project: await readProject(pool, slug) });
     }
 
     if (req.method === "GET" && req.url === "/worker/source/latest") {
