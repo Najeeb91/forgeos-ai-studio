@@ -44,7 +44,7 @@ function Builder() {
               const requestedPrompt = prompt.trim();
               const runId = globalThis.crypto?.randomUUID?.() ?? `run-${Date.now()}`;
               try {
-                const result = await runForgeBuild({ data: { runId, prompt: requestedPrompt } });
+                const result = await runForgeBuild({ data: { runId, projectSlug: slug, prompt: requestedPrompt } });
                 if (result.state === "passed") {
                   toast.success(`Real worker build passed — ${result.sourceFileCount} source files verified.`);
                 } else {
