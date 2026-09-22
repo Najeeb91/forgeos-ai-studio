@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 
 import { PageBody, Panel } from "@/components/forge/shell";
 import { Pill } from "@/components/forge/status";
-import { getProject } from "@/lib/forge/data";
+import { useForgeProject } from "@/lib/forge/use-project";
 import type { FileNode } from "@/lib/forge/types";
 
 export const Route = createFileRoute("/projects/$slug/files")({
@@ -26,7 +26,7 @@ function filesByStatus(files: FileNode[]) {
 
 function Files() {
   const { slug } = Route.useParams();
-  const project = getProject(slug)!;
+  const project = useForgeProject();
   const flatFiles = useMemo(() => project.files.flatMap(flatten), [project]);
   const counts = useMemo(() => filesByStatus(flatFiles), [flatFiles]);
   const [selectedPath, setSelectedPath] = useState<string | undefined>(flatFiles[0]?.path);
