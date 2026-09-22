@@ -157,10 +157,10 @@ export async function repairAndBuild({runId,prompt,files,failure,execute}) {
   return {...result,repairSimulated:false,generationMode:"ai-repair",provider:c.provider,model:c.model,sourceFiles:artifacts};
 }
 
-export async function latestSource(pool) {
+export async function latestSource(pool, projectSlug) {
   if(!pool)return [];
   await ensureSchema(pool);
-  const snap=await pool.query("SELECT id FROM source_snapshots ORDER BY created_at DESC LIMIT 1");
+  const snap=await pool.query("SELECT ss.id FROM source_snapshots ss JOIN projects p ON p.id=ss.project_id WHERE p.slug=$1 ORDER BY ss.created_at DESC LIMIT 1",[projectSlug || "forgeos"]);
   if(!snap.rows[0])return [];
   const rows=await pool.query("SELECT path,content FROM source_files WHERE snapshot_id=$1 ORDER BY path",[snap.rows[0].id]);
   return rows.rows.map((r)=>({path:r.path,content:r.content}));
