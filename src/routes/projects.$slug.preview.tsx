@@ -5,13 +5,13 @@ import { Button } from "@/components/ui/button";
 import { PageBody, Panel } from "@/components/forge/shell";
 import { Pill } from "@/components/forge/status";
 import { getLatestGeneratedApp } from "@/lib/forge/execution.functions";
-import { getProject } from "@/lib/forge/data";
+import { useForgeProject } from "@/lib/forge/use-project";
 
 export const Route = createFileRoute("/projects/$slug/preview")({ component: Preview });
 
 function Preview() {
   const { slug } = Route.useParams();
-  const project = getProject(slug)!;
+  const project = useForgeProject();
   const [device,setDevice]=useState<"desktop"|"tablet"|"mobile">("desktop");
   const [refreshes,setRefreshes]=useState(0);
   const [srcDoc,setSrcDoc]=useState("");
