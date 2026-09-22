@@ -9,6 +9,7 @@ import { PageBody, EmptyState, Panel } from "@/components/forge/shell";
 import { Pill, RiskPill } from "@/components/forge/status";
 import { useForgeProject } from "@/lib/forge/use-project";
 import { approveForgeBuild, runForgeBuild } from "@/lib/forge/execution.functions";
+import { releaseForgeProject } from "@/lib/forge/deploy.functions";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/projects/$slug/builder")({ component: Builder });
@@ -31,7 +32,7 @@ type LocalRun = {
   startedAt:string;
   plan:LocalStep[];
   events:Array<{id:string;at:string;level:keyof typeof levelTone;stage:string;message:string}>;
-  approval?: { id:string; step_id?:string; target?:string; reason?:string; risk?:string; status:string };
+  approval?: { id:string; step_id?:string; actionType?:string; target?:string; reason?:string; risk?:string; status:string };
   testsPassed?:boolean;
   sourceFileCount?:number;
 };
@@ -42,6 +43,7 @@ function Builder() {
   const [prompt, setPrompt] = useState("");
   const [activeRun, setActiveRun] = useState<LocalRun | null>(null);
   const [building, setBuilding] = useState(false);
+  const [approvalKind, setApprovalKind] = useState<"build"|"deployment">("build");
 
   function addEvent(run:LocalRun,event:LocalRun["events"][number]) {
     return { ...run, events:[...run.events,event] };
@@ -85,11 +87,19 @@ function Builder() {
     setBuilding(true);
     try {
       const approval=await approveForgeBuild({data:{runId:activeRun.id,approvalId:activeRun.approval.id,decision}});
-      let next=addEvent(activeRun,{id:`${activeRun.id}-approval-${Date.now()}`,at:new Date().toISOString(),level:"approval",stage:"approval",message:`Human approval decision: ${decision}`});
+      let next=addEvent(activeRun,{id:`${activeRun.id}-approval-${Date.now()}`,at:new Date().toISOString(),level:"approval",stage:approvalKind==="deployment"?"deploying":"approval",message:`Human approval decision: ${decision}`});
       next={...next,approval:{...next.approval!,status:decision},status:approval.state};
       if(decision==="rejected") {
         setActiveRun(next);
         toast("Execution rejected and durably recorded.");
+        return;
+      }
+      if(approvalKind==="deployment"){
+        const deployed=await releaseForgeProject({data:{runId:activeRun.id,projectSlug:slug,environment:"production"}});
+        next={...next,status:deployed.state,approval:deployed.approval ? {...deployed.approval,actionType:"deploy_production"} : undefined};
+        next=addEvent(next,{id:`${activeRun.id}-deploy-${Date.now()}`,at:new Date().toISOString(),level:deployed.state==="deploying"?"info":"error",stage:"deploying",message:deployed.deployment?.url ? "Real deployment adapter returned a URL." : "Deployment adapter processed the request."});
+        setActiveRun(next);
+        if(deployed.state==="deploying") toast.success("Deployment adapter accepted the release.");
         return;
       }
       const result=await runForgeBuild({data:{runId:activeRun.id,projectSlug:slug,prompt:activeRun.prompt,approved:true}});
@@ -101,6 +111,23 @@ function Builder() {
     } catch(error) {
       toast.error(error instanceof Error ? error.message : "Approval/execution failed");
     } finally { setBuilding(false); }
+  }
+
+  async function release() {
+    if(!activeRun?.testsPassed) return;
+    setBuilding(true);
+    try {
+      const result=await releaseForgeProject({data:{runId:activeRun.id,projectSlug:slug,environment:"production"}});
+      if(result.state==="awaiting_approval" && result.approval){
+        setApprovalKind("deployment");
+        setActiveRun({...activeRun,status:"awaiting_approval",approval:{...result.approval,actionType:"deploy_production"}});
+        toast("Production deployment is waiting for durable approval.");
+      } else {
+        setActiveRun({...activeRun,status:"deploying"});
+        toast.success(result.deployment?.url ? `Deployment created: ${result.deployment.url}` : "Deployment request accepted.");
+      }
+    } catch(error) { toast.error(error instanceof Error ? error.message : "Deployment failed"); }
+    finally { setBuilding(false); }
   }
 
   const run=activeRun;
@@ -167,7 +194,7 @@ function Builder() {
                 {run.events.map((e)=><div key={e.id} className="flex gap-3 border-b border-border/60 px-4 py-2 last:border-0"><span className="text-muted-foreground">{e.at}</span><span className="w-24 shrink-0 text-muted-foreground">{e.stage}</span><span className={cn("min-w-0 flex-1",levelTone[e.level])}>{e.message}</span></div>)}
               </div>
             </Panel>
-            {run.testsPassed ? <Panel title="Verified outcome"><p className="text-sm text-success">Real build passed. ForgeOS recorded the result as non-simulated.</p></Panel> : null}
+            {run.testsPassed ? <><Panel title="Verified outcome"><p className="text-sm text-success">Real build passed. ForgeOS recorded the result as non-simulated.</p><div className="mt-3"><Button size="sm" onClick={()=>void release()} disabled={building || run.status==="deploying"}>{building ? "Releasing…" : "Release to production"}</Button></div></Panel></> : null}
           </>
         ) : null}
       </div>
