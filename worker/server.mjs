@@ -222,7 +222,7 @@ const server = http.createServer(async (req, res) => {
       const environment = payload.environment || "production";
       if (!runId) return json(res, 400, { error: "runId_required" });
 
-      const run = (await pool.query("SELECT ar.id,ar.project_id,ar.status,(SELECT status FROM test_runs WHERE project_id=ar.project_id AND snapshot_id IS NOT NULL ORDER BY created_at DESC LIMIT 1) AS latest_test_status FROM ai_runs ar WHERE ar.id=$1 LIMIT 1",[runId])).rows[0];
+      const run = (await pool.query("SELECT ar.id,ar.project_id,ar.status,(SELECT status FROM test_runs WHERE run_id=ar.id ORDER BY created_at DESC LIMIT 1) AS latest_test_status FROM ai_runs ar WHERE ar.id=$1 LIMIT 1",[runId])).rows[0];
       if (!run) return json(res, 404, { error: "run_not_found" });
       if (run.status !== "review") return json(res, 409, { error: "real_test_review_required" });
       if (run.latest_test_status !== "passed") return json(res, 409, { error: "real_tests_required" });
