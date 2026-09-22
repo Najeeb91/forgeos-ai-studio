@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 
 import { PageBody, Panel } from "@/components/forge/shell";
 import { Pill, RiskPill } from "@/components/forge/status";
-import { getProject } from "@/lib/forge/data";
+import { useForgeProject } from "@/lib/forge/use-project";
 import type { ChangeEntry } from "@/lib/forge/types";
 
 export const Route = createFileRoute("/projects/$slug/history")({
@@ -13,7 +13,7 @@ export const Route = createFileRoute("/projects/$slug/history")({
 
 function History() {
   const { slug } = Route.useParams();
-  const project = getProject(slug)!;
+  const project = useForgeProject();
   const [filter, setFilter] = useState("all");
 
   const entries = useMemo(() => {
