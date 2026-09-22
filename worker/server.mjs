@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { buildAndPersist, repairAndBuild, latestSource, capabilities, readProject } from "./forge-core.mjs";
 import { runMigrations } from "./migrate.mjs";
+import { prepareBuild, approveBuild, assertApproved } from "./approval-core.mjs";
 
 const PORT = Number(process.env.PORT || 8080);
 const WORKER_TOKEN = process.env.FORGEOS_WORKER_TOKEN || "";
@@ -193,15 +194,40 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === "POST" && req.url === "/worker/build") {
       if (!authorized(req)) return json(res, 401, { error: "worker_auth_required" });
+      if (!pool) return json(res, 503, { error: "worker_database_not_configured" });
       const payload = await body(req);
       if (!payload.prompt || typeof payload.prompt !== "string") return json(res, 400, { error: "prompt_required" });
+      const runId = payload.runId || randomUUID();
+      const gate = await prepareBuild(pool, { runId, projectSlug: payload.projectSlug || "forgeos", prompt: payload.prompt });
+      if (gate.state === "awaiting_approval" && payload.approved !== true) {
+        return json(res, 200, { ...gate, simulated: false });
+      }
+      await assertApproved(pool, runId);
       const result = await buildAndPersist(pool, {
-        runId: payload.runId || randomUUID(),
+        runId,
         projectSlug: payload.projectSlug || "forgeos",
         prompt: payload.prompt,
         execute,
       });
-      return json(res, result.state === "passed" ? 200 : 422, result);
+      return json(res, result.state === "passed" ? 200 : 422, { ...result, approvalRequired: false });
+    }
+
+    if (req.method === "POST" && req.url === "/worker/approve") {
+      if (!authorized(req)) return json(res, 401, { error: "worker_auth_required" });
+      if (!pool) return json(res, 503, { error: "worker_database_not_configured" });
+      const payload = await body(req);
+      if (!payload.runId || !payload.approvalId) return json(res, 400, { error: "runId_and_approvalId_required" });
+      try {
+        const result = await approveBuild(pool, {
+          runId: payload.runId,
+          approvalId: payload.approvalId,
+          decision: payload.decision,
+          actorId: payload.actorId || "user",
+        });
+        return json(res, 200, { ...result, simulated: false });
+      } catch (error) {
+        return json(res, 409, { error: error instanceof Error ? error.message : "approval_failed" });
+      }
     }
 
     if (req.method === "POST" && req.url === "/worker/repair") {
