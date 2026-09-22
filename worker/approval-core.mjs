@@ -87,15 +87,16 @@ export async function approveBuild(pool, { runId, approvalId, decision, actorId 
     "UPDATE ai_run_steps SET status=$1 WHERE id=$2",
     [normalized === "approved" ? "done" : "rejected", approval.step_id]
   );
+  const nextRunState = approval.action_type === "deploy_production" ? (normalized === "approved" ? "review" : "failed") : (normalized === "approved" ? "executing" : "failed");
   await pool.query(
     "UPDATE ai_runs SET status=$1,updated_at=now() WHERE id=$2",
-    [normalized === "approved" ? "executing" : "failed", runId]
+    [nextRunState, runId]
   );
   await pool.query(
     "INSERT INTO ai_events(id,run_id,level,stage,message) VALUES($1,$2,'approval','approval',$3)",
     [randomUUID(), runId, "Human approval decision: " + normalized]
   );
-  return { runId, approvalId, decision: normalized, state: normalized === "approved" ? "executing" : "failed" };
+  return { runId, approvalId, decision: normalized, state: nextRunState };
 }
 
 export async function assertApproved(pool, runId) {
