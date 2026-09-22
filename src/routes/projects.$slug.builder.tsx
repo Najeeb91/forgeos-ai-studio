@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { PageBody, EmptyState, Panel } from "@/components/forge/shell";
 import { Pill, RiskPill } from "@/components/forge/status";
-import { getProject } from "@/lib/forge/data";
+import { useForgeProject } from "@/lib/forge/use-project";
 import { runForgeBuild } from "@/lib/forge/execution.functions";
 import { cn } from "@/lib/utils";
 
@@ -25,7 +25,7 @@ const levelTone = {
 
 function Builder() {
   const { slug } = Route.useParams();
-  const project = getProject(slug)!;
+  const project = useForgeProject();
   const run = project.runs[0];
   const [prompt, setPrompt] = useState("");
   const [decisions, setDecisions] = useState<Record<string, "approved" | "rejected">>({});
