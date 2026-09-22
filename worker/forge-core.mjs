@@ -64,7 +64,7 @@ async function aiGenerate(prompt) {
       max_tokens:12000,
       messages:[
         {role:"system",content:"You are the ForgeOS code generation engine. Return JSON only. Generate a coherent runnable Vite React web app. Include index.html, src/main.jsx, src/styles.css, package.json, vite.config.js and README.md. Build script must be exactly vite build. Do not add lifecycle scripts, credentials, arbitrary server commands, or unavailable services."},
-        {role:"user",content:"Build this requirement:\\n"+String(prompt).slice(0,4000)+'\\n\\nReturn {"artifacts":[{"path":"...","language":"...","content":"..."}]}.'
+        {role:"user",content:"Build this requirement:\\n"+String(prompt).slice(0,4000)+'\\n\\nReturn a JSON object with an artifacts array; each artifact has path, language, and content.'
       ],
       response_format:{type:"json_object"}
     })
