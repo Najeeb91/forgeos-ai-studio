@@ -66,6 +66,25 @@ function History() {
       >
         <div className="space-y-8">
           <section>
+            <h2 className="text-sm font-semibold">Recovered project context</h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Durable checkpoints recovered from the ForgeOS project history. These are summaries of prior project work, not fabricated ChatGPT transcript messages.
+            </p>
+            <div className="mt-4 space-y-3">
+              {contextHistory.length ? contextHistory.map((entry) => (
+                <article key={entry.id} className="rounded-lg border border-border bg-surface p-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Pill tone="neutral">{entry.kind}</Pill>
+                    <time className="font-mono text-[11px] text-muted-foreground">{new Date(entry.occurredAt).toLocaleString()}</time>
+                    <Pill tone="info">{entry.source}</Pill>
+                  </div>
+                  <h3 className="mt-2 text-sm font-medium">{entry.title}</h3>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">{entry.content}</p>
+                </article>
+              )) : <div className="py-4 text-sm text-muted-foreground">No recovered project context yet.</div>}
+            </div>
+          </section>
+          <section>
             <h2 className="text-sm font-semibold">Project conversation</h2>
             <p className="mt-1 text-xs text-muted-foreground">Every persisted Builder request appears here as the project’s working conversation.</p>
             <div className="mt-4 space-y-3">
