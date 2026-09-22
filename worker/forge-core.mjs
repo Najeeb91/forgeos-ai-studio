@@ -198,7 +198,9 @@ async function ensureProject(pool, slug, prompt) {
     "INSERT INTO projects(id,slug,name,tagline,description,status,health,owner,stack,benchmark) VALUES($1,$2,$3,$4,$5,'building','healthy','forgeos',$6::jsonb,false) ON CONFLICT(slug) DO UPDATE SET updated_at=now() RETURNING id",
     [id,slug,name,"AI software factory","Project managed by ForgeOS. Initial requirement: "+String(prompt).slice(0,1000),JSON.stringify(["React","TypeScript","Vite"])]
   );
-  const projectId = r.rows[0].id;\n  await seedRecoveredContext(pool, projectId);\n  return projectId;
+  const projectId = r.rows[0].id;
+  await seedRecoveredContext(pool, projectId);
+  return projectId;
 }
 
 async function recordPlan(pool,runId) {
