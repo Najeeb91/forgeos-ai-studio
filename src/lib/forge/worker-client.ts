@@ -21,3 +21,11 @@ export async function getLatestGeneratedSource(projectSlug:string):Promise<Worke
   const payload=JSON.parse(text) as {files?:WorkerSourceFile[]};
   return payload.files??[];
 }
+
+export async function getProjectFromWorker(projectSlug:string):Promise<{project?:any}|null>{
+  const {url,token}=workerConfig();
+  const response=await fetch(`${url}/worker/project/${encodeURIComponent(projectSlug)}`,{headers:{authorization:`Bearer ${token}`}});
+  const text=await response.text();
+  if(!response.ok) throw new Error(`Project lookup failed (HTTP ${response.status})`);
+  return JSON.parse(text) as {project?:any};
+}
