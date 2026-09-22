@@ -18,10 +18,14 @@ function History() {
 
   const entries = useMemo(() => {
     const brainEvents = project.brain.history.map((entry) => ({ ...entry, source: "brain" as const }));
+    const persistedAudit = ((project as typeof project & { auditHistory?: ChangeEntry[] }).auditHistory ?? []).map((entry) => ({
+      ...entry,
+      source: "ai" as const,
+    }));
     const aiEvents: Array<ChangeEntry & { source: "ai" }> = project.runs.flatMap((run) =>
       run.events.map((event) => ({
         id: `${run.id}-${event.id}`,
-        at: `2026-09-20T${event.at}Z`,
+        at: event.at,
         actor: (event.level === "approval" ? "human" : "ai") as ChangeEntry["actor"],
         actorName: event.level === "approval" ? "Approval gate" : "Forge Builder",
         action: event.message,
@@ -33,7 +37,7 @@ function History() {
       })),
     );
 
-    const allEntries: Array<ChangeEntry & { source: "brain" | "ai" }> = [...brainEvents, ...aiEvents];
+    const allEntries: Array<ChangeEntry & { source: "brain" | "ai" }> = [...brainEvents, ...persistedAudit, ...aiEvents];
 
     return allEntries
       .sort((a, b) => b.at.localeCompare(a.at))
