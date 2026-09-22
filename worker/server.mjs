@@ -219,7 +219,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "GET" && req.url === "/worker/source/latest") {
       if (!authorized(req)) return json(res, 401, { error: "worker_auth_required" });
       if (!pool) return json(res, 503, { error: "worker_database_not_configured" });
-      return json(res, 200, { files: await latestSource(pool) });
+      return json(res, 200, { files: await latestSource(pool, req.headers["x-forgeos-project-slug"] || "forgeos") });
     }
 
     if (req.method === "POST" && req.url === "/worker/jobs") {
