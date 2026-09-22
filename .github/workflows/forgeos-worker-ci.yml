@@ -1,0 +1,42 @@
+name: ForgeOS Worker CI
+
+on:
+  push:
+    branches:
+      - main
+      - "forgeos-execution/**"
+  pull_request:
+    paths:
+      - "worker/**"
+      - ".github/workflows/forgeos-worker-ci.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: forgeos-worker-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-worker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: worker/package.json
+      - name: Install worker dependencies
+        run: npm install --prefix worker --ignore-scripts --no-audit --no-fund
+      - name: Syntax check
+        run: node --check worker/server.mjs && node --check worker/forge-core.mjs
+      - name: Validate Dockerfile
+        run: test -s worker/Dockerfile
+      - name: Repository portability check
+        run: |
+          if grep -R "railway\\.internal\\|RAILWAY_" worker src/lib/forge --exclude-dir=node_modules; then
+            echo "Provider-specific Railway runtime references found in product/worker source."
+            exit 1
+          fi
