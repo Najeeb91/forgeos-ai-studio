@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { EmptyState, PageBody, Panel } from "@/components/forge/shell";
 import { Pill } from "@/components/forge/status";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { getProject } from "@/lib/forge/data";
+import { useForgeProject } from "@/lib/forge/use-project";
 import type { Requirement, SchemaTable } from "@/lib/forge/types";
 
 export const Route = createFileRoute("/projects/$slug/brain")({
@@ -12,7 +12,7 @@ export const Route = createFileRoute("/projects/$slug/brain")({
 
 function Brain() {
   const { slug } = Route.useParams();
-  const project = getProject(slug)!;
+  const project = useForgeProject();
   const { requirements, decisions, architecture, schema, integrations, tests, history } = project.brain;
 
   return (
