@@ -31,7 +31,9 @@ jobs:
       - name: Install worker dependencies
         run: npm install --prefix worker --ignore-scripts --no-audit --no-fund
       - name: Syntax check
-        run: node --check worker/server.mjs && node --check worker/forge-core.mjs
+        run: node --check worker/server.mjs && node --check worker/forge-core.mjs && node --check worker/migrate.mjs && node --check worker/approval-core.mjs
+      - name: Validate migrations
+        run: test -s worker/migrations/001_baseline.sql && test -s worker/migrations/002_memory_and_provider.sql
       - name: Validate Dockerfile
         run: test -s worker/Dockerfile
       - name: Repository portability check
