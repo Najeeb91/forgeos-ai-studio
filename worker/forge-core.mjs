@@ -277,7 +277,7 @@ async function recordBuild(pool,{runId,projectSlug,prompt,artifacts,result,gener
   await pool.query("INSERT INTO conversation_messages(id,conversation_id,role,content,run_id) VALUES($1,$2,'user',$3,$4)",[randomUUID(),conversationId,prompt,runId]);
   await pool.query("INSERT INTO project_memory_entries(id,project_id,kind,title,content,author_type,source,provenance_run_id) VALUES($1,$2,'requirement',$3,$4,'user','builder',$5)",[randomUUID(),projectId,"Builder requirement",prompt,runId]);
   const providerAttemptId=randomUUID();
-  await pool.query("INSERT INTO provider_attempts(id,project_id,run_id,kind,provider,capability,status,simulated) VALUES($1,$2,$3,'execution',$4,'source-build','running',false)",[providerAttemptId,projectId,runId,result.provider||"http-executor"]);
+  await pool.query("INSERT INTO provider_attempts(id,project_id,run_id,kind,provider,capability,status,simulated) VALUES($1,$2,$3,'execution',$4,'source-build','running',false)",[providerAttemptId,projectId,runId,generation.provider||"http-executor"]);
   await pool.query("INSERT INTO ai_runs(id,project_id,prompt,provider,model,status,tokens_in,tokens_out) VALUES($1,$2,$3,$4,$5,'testing',$6,$7) ON CONFLICT(id) DO UPDATE SET status='testing'",[runId,projectId,prompt,generation.provider,generation.model,Number(generation.usage?.prompt_tokens||0),Number(generation.usage?.completion_tokens||0)]);
   await recordPlan(pool,runId);
   await pool.query("INSERT INTO ai_events(id,run_id,level,stage,message) VALUES($1,$2,'info','brain',$3)",[randomUUID(),runId,"Requirement accepted by ForgeOS."]);
