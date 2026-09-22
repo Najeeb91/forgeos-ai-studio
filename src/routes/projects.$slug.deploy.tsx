@@ -17,8 +17,8 @@ function Deploy() {
     <PageBody>
       <Panel
         title="Release control plane"
-        description="Environment state recorded by ForgeOS. No deployment is performed from this surface."
-        actions={<Pill tone="warning">simulated deployments</Pill>}
+        description="Deployment intent and provider observations are recorded by ForgeOS. Production releases remain approval-gated."
+        actions={<Pill tone="info">provider adapters</Pill>}
       >
         <div className="grid gap-4 lg:grid-cols-3">
           {(["preview", "staging", "production"] as const).map((env) => {
@@ -86,7 +86,7 @@ function Deploy() {
           <div>
             <p className="font-medium">Production release requires human approval.</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              The project currently holds staging behind failing tests. ForgeOS does not claim or initiate a production rollout.
+              Production rollout is available only after a real test pass and a durable human approval. ForgeOS never fabricates a deployment URL or success state.
             </p>
           </div>
         </div>
