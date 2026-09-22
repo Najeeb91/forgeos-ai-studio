@@ -232,10 +232,12 @@ const server = http.createServer(async (req, res) => {
         if (!approved) {
           const pending = (await pool.query("SELECT id,target,reason,risk,status FROM approval_requests WHERE run_id=$1 AND action_type='deploy_production' AND status='pending' ORDER BY created_at DESC LIMIT 1",[runId])).rows[0];
           if (pending) return json(res, 200, { state:"awaiting_approval", simulated:false, approval:pending });
+          const stepId=randomUUID();
+          await pool.query("INSERT INTO ai_run_steps(id,run_id,title,detail,stage,risk,status,order_idx) VALUES($1,$2,'Production deployment approval','Release the verified source snapshot to the production deployment adapter.','deploying','critical','awaiting_approval',999)",[stepId,runId]);
           const id=randomUUID();
-          await pool.query("INSERT INTO approval_requests(id,project_id,run_id,action_type,target,reason,risk,status) VALUES($1,$2,$3,'deploy_production',$4,$5,'critical','pending')",[id,run.project_id,runId,environment,"Release the verified source snapshot to the production deployment adapter."]);
+          await pool.query("INSERT INTO approval_requests(id,project_id,run_id,step_id,action_type,target,reason,risk,status) VALUES($1,$2,$3,$4,'deploy_production',$5,$6,'critical','pending')",[id,run.project_id,runId,stepId,environment,"Release the verified source snapshot to the production deployment adapter."]);
           await pool.query("INSERT INTO ai_events(id,run_id,level,stage,message) VALUES($1,$2,'approval','deploying','Production deployment is waiting for durable human approval.')",[randomUUID(),runId]);
-          return json(res, 200, { state:"awaiting_approval", simulated:false, approval:{id,target:environment,reason:"Release verified source to production.",risk:"critical",status:"pending"} });
+          return json(res, 200, { state:"awaiting_approval", simulated:false, approval:{id,step_id:stepId,actionType:"deploy_production",target:environment,reason:"Release verified source to production.",risk:"critical",status:"pending"} });
         }
       }
 
