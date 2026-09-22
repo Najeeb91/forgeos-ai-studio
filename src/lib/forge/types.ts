@@ -157,6 +157,48 @@ export interface AiRun {
   events: AiEvent[];
 }
 
+export interface ProjectMemoryEntry {
+  id: string;
+  kind: "conversation" | "requirement" | "decision" | "assumption" | "constraint" | "milestone" | "change" | "outcome";
+  title: string;
+  content: string;
+  authorType: "user" | "ai" | "system";
+  authorId?: string;
+  source: string;
+  occurredAt: string;
+  supersedesId?: string;
+}
+
+export interface ApprovalRequest {
+  id: string;
+  runId: string;
+  stepId?: string;
+  actionType: string;
+  target: string;
+  reason: string;
+  risk: RiskLevel;
+  status: "pending" | "approved" | "rejected" | "expired";
+  actorId?: string;
+  decisionReason?: string;
+  createdAt: string;
+  decidedAt?: string;
+}
+
+export interface ProviderAttempt {
+  id: string;
+  runId?: string;
+  kind: "execution" | "deployment" | "ai" | "database";
+  provider: string;
+  capability: string;
+  status: string;
+  priority?: number;
+  jobId?: string;
+  simulated: boolean;
+  error?: string;
+  startedAt: string;
+  completedAt?: string;
+}
+
 export interface Project {
   id: string;
   slug: string;
@@ -176,6 +218,11 @@ export interface Project {
   deployments: Deployment[];
   runs: AiRun[];
   preview: { route: string; status: "ready" | "cold" | "error"; lastBuiltAt: string };
+  memory?: ProjectMemoryEntry[];
+  approvals?: ApprovalRequest[];
+  providerAttempts?: ProviderAttempt[];
+  conversation?: { id: string; title: string; messages: { id: string; role: string; content: string; createdAt: string }[] };
+  deploymentHistory?: Deployment[];
 }
 
 export interface ProviderEntry {
