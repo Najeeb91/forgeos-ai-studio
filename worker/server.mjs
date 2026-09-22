@@ -8,6 +8,7 @@ import { Pool } from "pg";
 import { buildAndPersist, repairAndBuild, latestSource, capabilities, readProject } from "./forge-core.mjs";
 import { runMigrations } from "./migrate.mjs";
 import { prepareBuild, approveBuild, assertApproved } from "./approval-core.mjs";
+import { deployVercel } from "./deployment-core.mjs";
 
 const PORT = Number(process.env.PORT || 8080);
 const WORKER_TOKEN = process.env.FORGEOS_WORKER_TOKEN || "";
@@ -210,6 +211,45 @@ const server = http.createServer(async (req, res) => {
         execute,
       });
       return json(res, result.state === "passed" ? 200 : 422, { ...result, approvalRequired: false });
+    }
+
+    if (req.method === "POST" && req.url === "/worker/deploy") {
+      if (!authorized(req)) return json(res, 401, { error: "worker_auth_required" });
+      if (!pool) return json(res, 503, { error: "worker_database_not_configured" });
+      const payload = await body(req);
+      const runId = payload.runId;
+      const projectSlug = payload.projectSlug || "forgeos";
+      const environment = payload.environment || "production";
+      if (!runId) return json(res, 400, { error: "runId_required" });
+
+      const run = (await pool.query("SELECT ar.id,ar.project_id,ar.status,(SELECT status FROM test_runs WHERE project_id=ar.project_id AND snapshot_id IS NOT NULL ORDER BY created_at DESC LIMIT 1) AS latest_test_status FROM ai_runs ar WHERE ar.id=$1 LIMIT 1",[runId])).rows[0];
+      if (!run) return json(res, 404, { error: "run_not_found" });
+      if (run.status !== "review") return json(res, 409, { error: "real_test_review_required" });
+      if (run.latest_test_status !== "passed") return json(res, 409, { error: "real_tests_required" });
+
+      if (environment === "production") {
+        const approved = (await pool.query("SELECT id FROM approval_requests WHERE run_id=$1 AND action_type='deploy_production' AND status='approved' ORDER BY decided_at DESC LIMIT 1",[runId])).rows[0];
+        if (!approved) {
+          const pending = (await pool.query("SELECT id,target,reason,risk,status FROM approval_requests WHERE run_id=$1 AND action_type='deploy_production' AND status='pending' ORDER BY created_at DESC LIMIT 1",[runId])).rows[0];
+          if (pending) return json(res, 200, { state:"awaiting_approval", simulated:false, approval:pending });
+          const id=randomUUID();
+          await pool.query("INSERT INTO approval_requests(id,project_id,run_id,action_type,target,reason,risk,status) VALUES($1,$2,$3,'deploy_production',$4,$5,'critical','pending')",[id,run.project_id,runId,environment,"Release the verified source snapshot to the production deployment adapter."]);
+          await pool.query("INSERT INTO ai_events(id,run_id,level,stage,message) VALUES($1,$2,'approval','deploying','Production deployment is waiting for durable human approval.')",[randomUUID(),runId]);
+          return json(res, 200, { state:"awaiting_approval", simulated:false, approval:{id,target:environment,reason:"Release verified source to production.",risk:"critical",status:"pending"} });
+        }
+      }
+
+      const files=await latestSource(pool,projectSlug);
+      if (!files.length) return json(res, 409, { error:"source_required" });
+      const token=process.env.VERCEL_TOKEN || "";
+      const deployment=await deployVercel({token,projectName:("forgeos-"+projectSlug+"-"+runId.slice(0,8)).toLowerCase(),files,environment});
+      const deploymentId=randomUUID();
+      const snapshot=(await pool.query("SELECT id FROM source_snapshots WHERE project_id=$1 ORDER BY created_at DESC LIMIT 1",[run.project_id])).rows[0]?.id || null;
+      await pool.query("INSERT INTO deployments(id,project_id,env,status,commit_sha,url,adapter,simulated) VALUES($1,$2,$3,$4,$5,$6,'vercel',false)",[deploymentId,run.project_id,environment,deployment.state||"building",snapshot||"",deployment.url||""]);
+      await pool.query("INSERT INTO deployment_observations(id,deployment_id,status,url,provider_job_id,simulated,detail) VALUES($1,$2,$3,$4,$5,false,$6::jsonb)",[randomUUID(),deploymentId,deployment.state||"building",deployment.url||"",deployment.deploymentId||null,JSON.stringify(deployment)]);
+      await pool.query("INSERT INTO audit_events(id,project_id,actor,actor_name,action,target,risk,approved,diff_summary,stage) VALUES($1,$2,'system','ForgeOS','deploy',$3,'critical',$4,$5,'deploying')",[randomUUID(),run.project_id,environment,true,"Real Vercel deployment adapter invoked."]);
+      await pool.query("UPDATE ai_runs SET status='deploying',completed_at=now() WHERE id=$1",[runId]);
+      return json(res,200,{state:"deploying",simulated:false,deployment});
     }
 
     if (req.method === "POST" && req.url === "/worker/approve") {
