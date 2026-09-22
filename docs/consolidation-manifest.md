@@ -11,7 +11,7 @@ Merged capability sources:
 
 Non-negotiable:
 - No simulated result may be represented as real.
-- No deterministic generation fallback is presented as AI.
+- No deterministic generation fallback is presented as AI; when no AI provider is configured, ForgeOS may use an explicitly labeled non-AI `template` bootstrap mode.
 - Provider failure changes routing, not product architecture.
 - High-risk/destructive actions require durable approval.
 - Source snapshots are immutable evidence; patches should create a child snapshot.
