@@ -13,10 +13,13 @@ function aiConfig() {
 export function capabilities() {
   const c = aiConfig();
   return {
-    ai: { configured: Boolean(c.apiKey), provider: c.provider, model: c.model },
+    ai: { configured: Boolean(c.apiKey), provider: c.provider, model: c.model, fallback: "disabled" },
     realExecution: true,
-    repair: { available: Boolean(c.apiKey) },
-    persistence: { canonicalSchema: true },
+    repair: { available: Boolean(c.apiKey), bounded: true },
+    persistence: { canonicalSchema: true, migrations: true },
+    approvals: { durable: true, highRiskGate: true },
+    memory: { projectMemory: true, conversation: true, brainProjection: true },
+    providers: { routing: true, attemptsPersisted: true, automaticFailover: false },
   };
 }
 
