@@ -9,7 +9,7 @@ import { PageBody, EmptyState, Panel } from "@/components/forge/shell";
 import { Pill, RiskPill } from "@/components/forge/status";
 import { useForgeProject } from "@/lib/forge/use-project";
 import { approveForgeBuild, runForgeBuild } from "@/lib/forge/execution.functions";
-import { releaseForgeProject } from "@/lib/forge/deploy.functions";
+import { getForgeDeploymentStatus, releaseForgeProject } from "@/lib/forge/deploy.functions";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/projects/$slug/builder")({ component: Builder });
@@ -113,6 +113,32 @@ function Builder() {
     } finally { setBuilding(false); }
   }
 
+  async function watchDeployment(runId:string) {
+    for(let attempt=0; attempt<10; attempt++){
+      await new Promise((resolve)=>setTimeout(resolve,3000));
+      try {
+        const status=await getForgeDeploymentStatus({data:{runId}});
+        const normalized=String(status.state ?? "unknown");
+        setActiveRun((current)=>current ? addEvent({...current,status:normalized},{
+          id:`${runId}-deploy-status-${Date.now()}`,
+          at:new Date().toISOString(),
+          level:normalized==="ready" ? "info" : normalized==="failed" ? "error" : "action",
+          stage:"deploying",
+          message:normalized==="ready" ? "Production deployment is live and verified by the provider." : `Deployment provider status: ${normalized}.`,
+        }) : current);
+        if(normalized==="ready" || normalized==="failed" || normalized==="cancelled") return;
+      } catch(error) {
+        setActiveRun((current)=>current ? addEvent(current,{
+          id:`${runId}-deploy-status-error-${Date.now()}`,
+          at:new Date().toISOString(),
+          level:"warn",
+          stage:"deploying",
+          message:error instanceof Error ? `Deployment status check: ${error.message}` : "Deployment status check failed.",
+        }) : current);
+      }
+    }
+  }
+
   async function release() {
     if(!activeRun?.testsPassed) return;
     setBuilding(true);
@@ -125,6 +151,7 @@ function Builder() {
       } else {
         setActiveRun({...activeRun,status:"deploying"});
         toast.success(result.deployment?.url ? `Deployment created: ${result.deployment.url}` : "Deployment request accepted.");
+        void watchDeployment(activeRun.id);
       }
     } catch(error) { toast.error(error instanceof Error ? error.message : "Deployment failed"); }
     finally { setBuilding(false); }
