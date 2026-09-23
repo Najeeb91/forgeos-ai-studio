@@ -1,4 +1,4 @@
-import { AIProvider } from "../core/provider-contracts.mjs";
+import { AIProvider } from "../../core/provider-contracts.mjs";
 
 function config() {
   return {
