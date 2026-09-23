@@ -341,11 +341,16 @@ const server = http.createServer(async (req, res) => {
         return json(res, 401, { error: "worker_auth_required" });
       }
 
-      return json(res, 202, {
-        accepted: true,
-        cancelled: false,
-        reason: "cancellation_registry_not_enabled",
-      });
+      const payload=await body(req);
+      if(!payload.runId)return json(res,400,{error:"runId_required"});
+      const run=(await pool.query("SELECT id,status FROM ai_runs WHERE id=$1 LIMIT 1",[payload.runId])).rows[0];
+      if(!run)return json(res,404,{error:"run_not_found"});
+      if(["deployed","failed","cancelled","rejected"].includes(run.status))return json(res,409,{error:"run_already_terminal",status:run.status});
+      await pool.query("UPDATE ai_runs SET status='cancelled',completed_at=now(),updated_at=now() WHERE id=$1",[payload.runId]);
+      await pool.query("UPDATE provider_attempts SET status='cancelled',completed_at=now(),error=coalesce(error,'cancelled_by_user') WHERE run_id=$1 AND status IN ('running','pending')",[payload.runId]);
+      await pool.query("UPDATE ai_run_steps SET status='cancelled' WHERE run_id=$1 AND status IN ('running','pending','awaiting_review')",[payload.runId]);
+      await pool.query("INSERT INTO ai_events(id,run_id,level,stage,message) VALUES($1,$2,'info','cancelled','Run cancelled by user.')",[randomUUID(),payload.runId]);
+      return json(res,200,{accepted:true,cancelled:true,simulated:false,runId:payload.runId});
     }
 
     return json(res, 404, { error: "not_found" });
