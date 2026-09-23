@@ -14,3 +14,11 @@ export const releaseForgeProject=createServerFn({method:"POST"})
     if(payload.simulated!==false)throw new Error("Deployment was not reported as real");
     return payload;
   });
+
+
+export const getForgeDeploymentStatus=createServerFn({method:"GET"})
+  .validator(z.object({runId:z.string().min(1)}))
+  .handler(async({data})=>{
+    const { getDeploymentStatus } = await import("./worker-client");
+    return getDeploymentStatus(data.runId);
+  });
