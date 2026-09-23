@@ -283,7 +283,7 @@ async function recordBuild(pool,{runId,projectSlug,prompt,artifacts,result,gener
   }
   await pool.query("INSERT INTO conversation_messages(id,conversation_id,role,content,run_id) VALUES($1,$2,'user',$3,$4)",[randomUUID(),conversationId,prompt,runId]);
   await pool.query("INSERT INTO project_memory_entries(id,project_id,kind,title,content,author_type,source,provenance_run_id) VALUES($1,$2,'requirement',$3,$4,'user','builder',$5)",[randomUUID(),projectId,"Builder requirement",prompt,runId]);
-  const previousBrain=(await pool.query("SELECT version,vision,requirements,decisions,architecture,"schema",integrations FROM project_brain_versions WHERE project_id=$1 ORDER BY version DESC LIMIT 1",[projectId])).rows[0];
+  const previousBrain=(await pool.query("SELECT version,vision,requirements,decisions,architecture,\"schema\",integrations FROM project_brain_versions WHERE project_id=$1 ORDER BY version DESC LIMIT 1",[projectId])).rows[0];
   const brainVersion=Number(previousBrain?.version||0)+1;
   const brainVersionId=randomUUID();
   const requirements=Array.isArray(previousBrain?.requirements)?[...previousBrain.requirements,{id:randomUUID(),title:"Builder requirement",detail:prompt,kind:"functional",priority:"must",status:"draft"}]:[{id:randomUUID(),title:"Builder requirement",detail:prompt,kind:"functional",priority:"must",status:"draft"}];
