@@ -99,7 +99,10 @@ function Builder() {
         next={...next,status:deployed.state,approval:deployed.approval ? {...deployed.approval,actionType:"deploy_production"} : undefined};
         next=addEvent(next,{id:`${activeRun.id}-deploy-${Date.now()}`,at:new Date().toISOString(),level:deployed.state==="deploying"?"info":"error",stage:"deploying",message:deployed.deployment?.url ? "Real deployment adapter returned a URL." : "Deployment adapter processed the request."});
         setActiveRun(next);
-        if(deployed.state==="deploying") toast.success("Deployment adapter accepted the release.");
+        if(deployed.state==="deploying") {
+          toast.success("Deployment adapter accepted the release.");
+          void watchDeployment(activeRun.id);
+        }
         return;
       }
       const result=await runForgeBuild({data:{runId:activeRun.id,projectSlug:slug,prompt:activeRun.prompt,approved:true}});
