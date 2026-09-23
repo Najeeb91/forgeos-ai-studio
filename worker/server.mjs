@@ -142,8 +142,9 @@ const server = http.createServer(async (req, res) => {
 
       const files=await latestSource(pool,projectSlug);
       if (!files.length) return json(res, 409, { error:"source_required" });
-      const token=(await secretsProvider.get("VERCEL_TOKEN"))?.value || "";
       const selectedDeploy=await selectProvider(deployProviders, preferredDeployProvider);
+      const deploySecret=await secretsProvider.get(selectedDeploy.provider.id === "netlify" ? "NETLIFY_AUTH_TOKEN" : "VERCEL_TOKEN");
+      const token=deploySecret?.value || "";
       const deployment=await selectedDeploy.provider.deploy({token,projectName:("forgeos-"+projectSlug+"-"+runId.slice(0,8)).toLowerCase(),files,environment});
       const deploymentId=randomUUID();
       const snapshot=(await pool.query("SELECT id FROM source_snapshots WHERE project_id=$1 ORDER BY created_at DESC LIMIT 1",[run.project_id])).rows[0]?.id || null;
