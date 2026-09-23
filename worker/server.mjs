@@ -4,6 +4,8 @@ import { createDeployProviders } from "./providers/deploy-provider.mjs";
 import { selectProvider, healthyProviders } from "./providers/registry.mjs";
 import { randomUUID } from "node:crypto";
 import { createDatabaseProvider } from "./providers/database-provider.mjs";
+import { createSourceProvider } from "./providers/source-provider.mjs";
+import { createSecretsProvider } from "./providers/secrets-provider.mjs";
 import { buildAndPersist, repairAndBuild, latestSource, capabilities, readProject } from "./forge-core.mjs";
 import { runMigrations } from "./migrate.mjs";
 import { prepareBuild, approveBuild, assertApproved } from "./approval-core.mjs";
@@ -17,6 +19,8 @@ const MAX_DURATION_MS = 120000;
 const MAX_OUTPUT_BYTES = 2 * 1024 * 1024;
 
 const databaseProvider = createDatabaseProvider();
+const sourceProvider = createSourceProvider();
+const secretsProvider = createSecretsProvider();
 const pool = databaseProvider.pool;
 
 function json(res, status, body) {
@@ -58,7 +62,7 @@ async function execute(runId, files) {
 
 async function providerHealth() {
   const checks = [];
-  for (const provider of [...buildProviders, ...deployProviders, databaseProvider]) {
+  for (const provider of [...buildProviders, ...deployProviders, databaseProvider, sourceProvider, secretsProvider]) {
     try {
       checks.push(await provider.health());
     } catch (error) {
