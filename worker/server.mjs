@@ -83,6 +83,8 @@ const server = http.createServer(async (req, res) => {
         realExecution: true,
         authenticatedExecution: Boolean(WORKER_TOKEN),
         databaseConfigured: Boolean(pool),
+        databaseReady,
+        databaseLastError: databaseReady ? null : databaseLastError,
         canonicalPersistence: true,
       });
     }
