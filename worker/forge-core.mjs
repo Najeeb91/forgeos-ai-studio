@@ -407,10 +407,12 @@ export async function repairAndBuild({pool=null,runId,projectSlug="forgeos",prom
     providerSelection:{selected:selected.provider.id,preferred:preferredAIProvider,failover:selected.provider.id!==preferredAIProvider}};
 }
 
-export async function latestSource(pool, projectSlug) {
+export async function latestSource(pool, projectSlug, runId=null) {
   if(!pool)return [];
   await ensureSchema(pool);
-  const snap=await pool.query("SELECT ss.id FROM source_snapshots ss JOIN projects p ON p.id=ss.project_id WHERE p.slug=$1 ORDER BY ss.created_at DESC LIMIT 1",[projectSlug || "forgeos"]);
+  const snap=runId
+    ? await pool.query("SELECT ss.id FROM source_snapshots ss JOIN projects p ON p.id=ss.project_id WHERE p.slug=$1 AND ss.run_id=$2 ORDER BY ss.created_at DESC LIMIT 1",[projectSlug || "forgeos",runId])
+    : await pool.query("SELECT ss.id FROM source_snapshots ss JOIN projects p ON p.id=ss.project_id WHERE p.slug=$1 ORDER BY ss.created_at DESC LIMIT 1",[projectSlug || "forgeos"]);
   if(!snap.rows[0])return [];
   const rows=await pool.query("SELECT path,content FROM source_files WHERE snapshot_id=$1 ORDER BY path",[snap.rows[0].id]);
   return rows.rows.map((r)=>({path:r.path,content:r.content}));
