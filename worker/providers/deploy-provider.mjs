@@ -23,8 +23,8 @@ export class VercelDeployProvider {
   }
 }
 
-export function createDeployProviders() {
-  return [new VercelDeployProvider()];
+export function createDeployProviders(secretsProvider=null) {
+  return [new VercelDeployProvider(secretsProvider), createNetlifyDeployProvider(secretsProvider)];
 }
 
 export function createDeployProvider(secretsProvider=null) {
