@@ -210,11 +210,10 @@ const server = http.createServer(async (req, res) => {
       }
       if (!deployment || !selectedProvider) {
         const message=providerAttempts.map((a)=>a.provider+":"+a.error).join(";") || "all_deploy_providers_failed";
-        await transitionRun(pool,runId,"failed",{eventStage:"deploying",message:"All deployment providers failed: "+message,level:"error"}).catch(()=>{});
+        await transitionRun(pool,runId,"failed",{eventStage:"deploying",message:"All deployment providers failed: "+message,level:"error"});
         await pool.query("INSERT INTO audit_events(id,project_id,actor,actor_name,action,target,risk,approved,diff_summary,stage) VALUES($1,$2,'system','ForgeOS','deploy_failed',$3,'critical',true,$4,'deploying')",[randomUUID(),run.project_id,environment,message]).catch(()=>{});
         return json(res,502,{state:"failed",simulated:false,error:message,providerAttempts});
       }
-      await pool.query("UPDATE provider_attempts SET status='succeeded',completed_at=now(),job_id=$1,observations=$2::jsonb WHERE id=$3",[deployment.deploymentId||null,JSON.stringify({state:deployment.state,url:deployment.url,provider:selectedProvider.id}),providerAttemptId]).catch(()=>{});
       const deploymentId=randomUUID();
       const snapshot=(await pool.query("SELECT id FROM source_snapshots WHERE run_id=$1 ORDER BY created_at DESC LIMIT 1",[runId])).rows[0]?.id || null;
       await pool.query("INSERT INTO deployments(id,project_id,run_id,env,status,commit_sha,url,adapter,simulated) VALUES($1,$2,$3,$4,$5,$6,$7,$8,false)",[deploymentId,run.project_id,runId,environment,deployment.state||"building",snapshot||"",deployment.url||"",selectedDeploy.provider.id]);
