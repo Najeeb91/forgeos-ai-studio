@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { Pool } from "pg";
+import pg from "../worker/node_modules/pg/index.js";
+
+const { Pool } = pg;
 
 import { runMigrations } from "../worker/migrate.mjs";
 import { createProject, buildAndPersist } from "../worker/forge-core.mjs";
