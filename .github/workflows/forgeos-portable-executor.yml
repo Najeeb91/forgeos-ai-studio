@@ -24,12 +24,11 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 22
-          cache: npm
       - name: Validate generated source
         run: |
           test -f package.json
           node -e "const p=require('./package.json'); if(!['vite build','next build','tsc --noEmit'].includes((p.scripts||{}).build||'')) process.exit(1)"
-          if grep -R "preinstall\|postinstall\|prepare" package.json; then exit 1; fi
+          if grep -R "preinstall|postinstall|prepare" package.json; then exit 1; fi
       - name: Install dependencies
         run: npm install --ignore-scripts --no-audit --no-fund
       - name: Real build
@@ -37,8 +36,9 @@ jobs:
       - name: Record execution evidence
         run: |
           mkdir -p forgeos-evidence
-          printf '%s\n' '{"simulated":false,"provider":"github-actions","runId":"\${{ inputs.run_id }}","projectSlug":"\${{ inputs.project_slug }}","state":"passed"}' > forgeos-evidence/result.json
+          printf '%s
+' '{"simulated":false,"provider":"github-actions","runId":"${{ inputs.run_id }}","projectSlug":"${{ inputs.project_slug }}","state":"passed"}' > forgeos-evidence/result.json
       - uses: actions/upload-artifact@v6
         with:
-          name: forgeos-\${{ inputs.run_id }}
+          name: forgeos-${{ inputs.run_id }}
           path: forgeos-evidence/result.json
