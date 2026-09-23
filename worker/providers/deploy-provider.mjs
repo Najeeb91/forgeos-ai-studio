@@ -21,6 +21,10 @@ export class VercelDeployProvider {
   }
 }
 
+export function createDeployProviders() {
+  return [new VercelDeployProvider()];
+}
+
 export function createDeployProvider() {
   const provider = process.env.FORGEOS_DEPLOY_PROVIDER || "vercel";
   if (provider === "vercel") return new VercelDeployProvider();
