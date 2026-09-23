@@ -2,18 +2,19 @@ import { deployVercel } from "../deployment-core.mjs";
 import { createNetlifyDeployProvider } from "./netlify-deploy-provider.mjs";
 
 export class VercelDeployProvider {
-  constructor() {
+  constructor(secretsProvider=null) {
     this.id = "vercel";
     this.capability = "deploy";
+    this.secrets = secretsProvider;
   }
 
   async health() {
     return {
-      ok: Boolean(process.env.VERCEL_TOKEN),
+      ok: Boolean(this.secrets ? await this.secrets.get("VERCEL_TOKEN") : process.env.VERCEL_TOKEN),
       provider: this.id,
       capability: this.capability,
-      configured: Boolean(process.env.VERCEL_TOKEN),
-      realExecution: Boolean(process.env.VERCEL_TOKEN),
+      configured: Boolean(this.secrets ? await this.secrets.get("VERCEL_TOKEN") : process.env.VERCEL_TOKEN),
+      realExecution: Boolean(this.secrets ? await this.secrets.get("VERCEL_TOKEN") : process.env.VERCEL_TOKEN),
     };
   }
 
@@ -28,7 +29,7 @@ export function createDeployProviders() {
 
 export function createDeployProvider(secretsProvider=null) {
   const provider = process.env.FORGEOS_DEPLOY_PROVIDER || "vercel";
-  if (provider === "vercel") return new VercelDeployProvider();
+  if (provider === "vercel") return new VercelDeployProvider(secretsProvider);
   if (provider === "netlify") return createNetlifyDeployProvider(secretsProvider);
   throw new Error("unsupported_deploy_provider:" + provider);
 }
