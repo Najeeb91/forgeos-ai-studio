@@ -1,4 +1,4 @@
-import { deployVercel } from "../deployment-core.mjs";
+import { deployVercel, getVercelDeployment } from "../deployment-core.mjs";
 import { createNetlifyDeployProvider } from "./netlify-deploy-provider.mjs";
 
 export class VercelDeployProvider {
@@ -20,6 +20,10 @@ export class VercelDeployProvider {
 
   async deploy({ token, projectName, files, environment = "production" }) {
     return deployVercel({ token, projectName, files, environment });
+  }
+
+  async status({ token, deploymentId }) {
+    return getVercelDeployment({ token, deploymentId });
   }
 }
 
