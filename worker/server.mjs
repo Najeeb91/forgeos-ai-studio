@@ -323,6 +323,19 @@ const server = http.createServer(async (req, res) => {
       return json(res, result.state === "passed" ? 200 : 422, result);
     }
 
+    if (req.method === "POST" && req.url === "/worker/run/recover") {
+      if (!authorized(req)) return json(res,401,{error:"worker_auth_required"});
+      if (!pool) return json(res,503,{error:"worker_database_not_configured"});
+      const payload=await body(req);
+      if(!payload.runId)return json(res,400,{error:"runId_required"});
+      const run=(await pool.query("SELECT id,status FROM ai_runs WHERE id=$1 LIMIT 1",[payload.runId])).rows[0];
+      if(!run)return json(res,404,{error:"run_not_found"});
+      if(run.status!=="recovery_required")return json(res,409,{error:"run_not_recoverable",status:run.status});
+      await pool.query("UPDATE ai_runs SET status='executing',completed_at=NULL,updated_at=now() WHERE id=$1",[payload.runId]);
+      await pool.query("INSERT INTO ai_events(id,run_id,level,stage,message) VALUES($1,$2,'info','recovery','Run explicitly recovered after worker interruption.')",[randomUUID(),payload.runId]);
+      return json(res,200,{state:"recovered",simulated:false,runId:payload.runId});
+    }
+
     if (req.method === "POST" && req.url === "/worker/jobs/cancel") {
       if (!authorized(req)) {
         return json(res, 401, { error: "worker_auth_required" });
