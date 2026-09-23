@@ -34,6 +34,18 @@ export class LocalTemplateAIProvider extends AIProvider {
 export class OpenAICompatibleProvider extends AIProvider {
   constructor(){super({id:config().provider});}
   async health(){const c=config();return {ok:Boolean(c.apiKey),provider:this.id,capability:"ai",configured:Boolean(c.apiKey),realExecution:Boolean(c.apiKey),model:c.model,baseUrl:c.baseUrl};}
+  async repair({prompt,files,failure}){
+    const c=config();
+    const response=await fetch(c.baseUrl+"/chat/completions",{method:"POST",headers:{"content-type":"application/json",authorization:"Bearer "+c.apiKey},body:JSON.stringify({model:c.model,temperature:.1,max_tokens:12000,messages:[
+      {role:"system",content:"You are the ForgeOS repair engine. Return JSON only. Repair the supplied Vite React application so it passes a Vite build. Preserve the user's requirement and existing functionality where possible. Include index.html, src/main.jsx, src/styles.css, package.json, vite.config.js and README.md. Build script must be exactly vite build. Do not add lifecycle scripts, credentials, arbitrary server commands, or unavailable services."},
+      {role:"user",content:"Requirement:\n"+String(prompt).slice(0,4000)+"\n\nBuild failure:\n"+String(failure).slice(0,5000)+"\n\nCurrent files:\n"+JSON.stringify(files||[]).slice(0,30000)+"\n\nReturn a JSON object with an artifacts array; each artifact has path, language, and content."}],response_format:{type:"json_object"}})});
+    const body=await response.json().catch(()=>({}));
+    if(!response.ok)throw new Error(body?.error?.message||"ai_repair_http_"+response.status);
+    const content=body?.choices?.[0]?.message?.content;
+    if(typeof content!=="string")throw new Error("ai_repair_empty_response");
+    let parsed;try{parsed=JSON.parse(content)}catch{throw new Error("ai_repair_invalid_json")}
+    return {artifacts:parsed.artifacts,mode:"ai-repair",provider:this.id,model:c.model,usage:body?.usage||{}};
+  }
   async generate(prompt){
     const c=config();
     const response=await fetch(c.baseUrl+"/chat/completions",{method:"POST",headers:{"content-type":"application/json",authorization:"Bearer "+c.apiKey},body:JSON.stringify({model:c.model,temperature:.15,max_tokens:12000,messages:[
