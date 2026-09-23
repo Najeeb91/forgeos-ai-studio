@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import pg from "../worker/node_modules/pg/index.js";
+import pg from "../worker/node_modules/pg/lib/index.js";
 
 const { Pool } = pg;
 
