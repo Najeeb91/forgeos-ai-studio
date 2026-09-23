@@ -14,7 +14,7 @@ No single hosting, AI, database, source-control, storage, build, or deployment v
 - DeployProvider: Vercel, AWS, Netlify, self-hosted, etc.
 - SecretsProvider: platform secrets or external secret managers.
 - SourceProvider: GitHub first, future GitLab/other providers.
-- StorageProvider: object storage or local/project storage.
+- StorageProvider: object storage or local/project storage.\n\n## Current provider routing status\n\n- AI: provider registry with automatic fallback to deterministic local generation when configured AI is unavailable.\n- Build: provider registry with health-based selection across local process and Docker.\n- Deploy: provider registry boundary; Vercel is currently the only production implementation.\n- Database: worker persistence now enters through a `DatabaseProvider`; PostgreSQL is the current implementation.\n- Storage: provider contract and health boundary are present, but source/artifact writes still use the canonical database persistence path until a real object-storage implementation is connected.\n\nProvider boundaries are not considered complete merely because an interface exists: a provider is only marked operational when its implementation performs real work and its health check verifies the required capability.
 
 ## Current launch infrastructure
 
