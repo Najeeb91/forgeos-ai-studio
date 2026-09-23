@@ -16,7 +16,7 @@ export function capabilities() {
     persistence: { canonicalSchema: true, migrations: true },
     approvals: { durable: true, highRiskGate: true },
     memory: { projectMemory: true, conversation: true, brainProjection: true },
-    providers: { routing: true, attemptsPersisted: true, automaticFailover: true },
+    providers: { routing: true, attemptsPersisted: true, automaticFailover: true, database: process.env.FORGEOS_DATABASE_PROVIDER || "postgres", source: process.env.FORGEOS_SOURCE_PROVIDER || "github", secrets: "environment" },
   };
 }
 
