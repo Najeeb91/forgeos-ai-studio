@@ -171,6 +171,8 @@ const server = http.createServer(async (req, res) => {
       await pool.query("INSERT INTO deployment_observations(id,deployment_id,status,url,provider_job_id,simulated,detail) VALUES($1,$2,$3,$4,$5,false,$6::jsonb)",[randomUUID(),deploymentId,deployment.state||"building",deployment.url||"",deployment.deploymentId||null,JSON.stringify(deployment)]);
       await pool.query("INSERT INTO audit_events(id,project_id,actor,actor_name,action,target,risk,approved,diff_summary,stage) VALUES($1,$2,'system','ForgeOS','deploy',$3,'critical',$4,$5,'deploying')",[randomUUID(),run.project_id,environment,true,"Real deployment provider invoked: "+selectedDeploy.provider.id+"."]);
       await pool.query("UPDATE ai_runs SET status='deploying',completed_at=NULL WHERE id=$1",[runId]);
+      await pool.query("UPDATE ai_run_steps SET status='done' WHERE run_id=$1 AND stage='review' AND status NOT IN ('rejected')",[runId]);
+      await pool.query("UPDATE ai_run_steps SET status='running' WHERE run_id=$1 AND stage='deploy' AND status NOT IN ('done','rejected')",[runId]);
       return json(res,200,{state:"deploying",simulated:false,deployment});
     }
 
@@ -211,8 +213,10 @@ const server = http.createServer(async (req, res) => {
       await pool.query("INSERT INTO deployment_observations(id,deployment_id,status,url,provider_job_id,simulated,detail) VALUES($1,$2,$3,$4,$5,false,$6::jsonb)",[randomUUID(),row.id,normalized,observed.url||row.url||"",observed.deploymentId||row.provider_job_id||null,JSON.stringify(observed)]);
       if (normalized === "ready") {
         await pool.query("UPDATE ai_runs SET status='deployed',completed_at=now() WHERE id=$1 AND status='deploying'",[row.run_id]);
+        await pool.query("UPDATE ai_run_steps SET status='done' WHERE run_id=$1 AND stage='deploy'",[row.run_id]);
       } else if (normalized === "failed") {
         await pool.query("UPDATE ai_runs SET status='failed',completed_at=now() WHERE id=$1 AND status='deploying'",[row.run_id]);
+        await pool.query("UPDATE ai_run_steps SET status='failed' WHERE run_id=$1 AND stage='deploy' AND status NOT IN ('done','rejected')",[row.run_id]);
       }
       return json(res, 200, { state: normalized, simulated: false, deployment: { id: row.id, provider: row.adapter, providerStatus: observed.state, deploymentId: observed.deploymentId, url: observed.url||row.url||null, environment: observed.environment||null } });
     }
