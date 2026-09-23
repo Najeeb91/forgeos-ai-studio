@@ -26,7 +26,7 @@ const secretsProvider = createSecretsProvider();
 const authProvider = createAuthProvider();
 const sourceProvider = createSourceProvider(secretsProvider);
 const storageProvider = createStorageProvider(databaseProvider);
-const pool = databaseProvider.pool;
+const pool = databaseProvider;
 
 function json(res, status, body) {
   const payload = JSON.stringify(body);
