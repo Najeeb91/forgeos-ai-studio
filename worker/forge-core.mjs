@@ -397,14 +397,36 @@ export async function autoRepairAndBuild({pool=null,runId,projectSlug="forgeos",
 
 export async function repairAndBuild({pool=null,runId,projectSlug="forgeos",prompt,files,failure,execute}) {
   const selected = await selectProvider(aiProviders, preferredAIProvider);
-  if (typeof selected.provider.repair !== "function") throw new Error("selected_ai_provider_cannot_repair");
-  const generated = await selected.provider.repair({prompt,files,failure});
+  let generated=null;
+  let selectedProvider=null;
+  const providerAttempts=[];
+  for (const candidate of selected.candidates || [{provider:selected.provider,health:selected.health}]) {
+    const provider=candidate.provider;
+    if (typeof provider.repair !== "function") {
+      providerAttempts.push({provider:provider.id,status:"skipped",error:"provider_cannot_repair"});
+      continue;
+    }
+    const attemptId=randomUUID();
+    if(pool) await pool.query("INSERT INTO provider_attempts(id,run_id,kind,provider,capability,status,priority,simulated) VALUES($1,$2,'repair',$3,'ai','running',$4,false)",[attemptId,runId,provider.id,candidate.health?.priority||0]).catch(()=>{});
+    try {
+      generated=await provider.repair({prompt,files,failure});
+      selectedProvider=provider;
+      providerAttempts.push({provider:provider.id,status:"succeeded"});
+      if(pool) await pool.query("UPDATE provider_attempts SET status='succeeded',completed_at=now(),observations=$1::jsonb WHERE id=$2",[JSON.stringify({model:generated.model,mode:generated.mode}),attemptId]).catch(()=>{});
+      break;
+    } catch(error) {
+      const message=error instanceof Error?error.message:String(error);
+      providerAttempts.push({provider:provider.id,status:"failed",error:message});
+      if(pool) await pool.query("UPDATE provider_attempts SET status='failed',completed_at=now(),error=$1 WHERE id=$2",[message,attemptId]).catch(()=>{});
+    }
+  }
+  if(!generated || !selectedProvider) throw new Error("all_ai_repair_providers_failed:"+providerAttempts.map((a)=>a.provider+":"+a.error).join(";"));
   const artifacts = validateArtifacts(generated.artifacts);
   const result = await execute(runId,artifacts);
   const persistence=await persistRepair(pool,{runId,prompt,files,failure,result,generation:{...generated,artifacts},projectSlug});
-  return {...result,repairSimulated:false,generationMode:"ai-repair",provider:generated.provider || selected.provider.id,model:generated.model,sourceFiles:artifacts,
+  return {...result,repairSimulated:false,generationMode:"ai-repair",provider:generated.provider || selectedProvider.id,model:generated.model,sourceFiles:artifacts,
     projectId:persistence?.projectId||null,snapshotId:persistence?.snapshotId||null,testRunId:persistence?.testRunId||null,
-    providerSelection:{selected:selected.provider.id,preferred:preferredAIProvider,failover:selected.provider.id!==preferredAIProvider}};
+    providerSelection:{selected:selectedProvider.id,preferred:preferredAIProvider,failover:selectedProvider.id!==preferredAIProvider},providerAttempts};
 }
 
 export async function latestSource(pool, projectSlug, runId=null) {
