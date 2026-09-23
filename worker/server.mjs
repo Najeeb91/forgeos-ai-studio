@@ -180,7 +180,7 @@ const server = http.createServer(async (req, res) => {
         return json(res,200,{state:existingDeployment.status,simulated:false,deployment:{id:existingDeployment.id,provider:existingDeployment.adapter,url:existingDeployment.url||null,reused:true}});
       }
 
-      const files=await latestSource(pool,projectSlug);
+      const files=await latestSource(pool,projectSlug,runId);
       if (!files.length) return json(res, 409, { error:"source_required" });
       const selectedDeploy=await selectProvider(deployProviders, preferredDeployProvider);
       const deploySecret=await secretsProvider.get(selectedDeploy.provider.id === "netlify" ? "NETLIFY_AUTH_TOKEN" : "VERCEL_TOKEN");
