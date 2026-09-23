@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 import { createDatabaseProvider } from "./providers/database-provider.mjs";
 import { createSourceProvider } from "./providers/source-provider.mjs";
 import { createSecretsProvider } from "./providers/secrets-provider.mjs";
+import { createAuthProvider } from "./providers/auth-provider.mjs";
 import { createStorageProvider } from "./providers/storage-provider.mjs";
 import { buildAndPersist, repairAndBuild, autoRepairAndBuild, latestSource, capabilities, readProject, listProjects, createProject } from "./forge-core.mjs";
 import { runMigrations } from "./migrate.mjs";
@@ -22,6 +23,7 @@ const MAX_OUTPUT_BYTES = 2 * 1024 * 1024;
 
 const databaseProvider = createDatabaseProvider();
 const secretsProvider = createSecretsProvider();
+const authProvider = createAuthProvider();
 const sourceProvider = createSourceProvider(secretsProvider);
 const storageProvider = createStorageProvider(databaseProvider);
 const pool = databaseProvider.pool;
@@ -46,10 +48,9 @@ async function body(req) {
   return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
 }
 
-function authorized(req) {
-  if (!WORKER_TOKEN) return false;
-  const value = req.headers.authorization || "";
-  return value === `Bearer ${WORKER_TOKEN}`;
+async function authorized(req) {
+  const result = await authProvider.authenticate(req);
+  return result.ok === true;
 }
 
 const buildProviders = createBuildProviders();
@@ -83,7 +84,7 @@ async function execute(runId, files) {
 
 async function providerHealth() {
   const checks = [];
-  for (const provider of [...buildProviders, ...deployProviders, databaseProvider, storageProvider, sourceProvider, secretsProvider]) {
+  for (const provider of [...buildProviders, ...deployProviders, databaseProvider, storageProvider, sourceProvider, secretsProvider, authProvider]) {
     try {
       checks.push(await provider.health());
     } catch (error) {
@@ -109,7 +110,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && req.url === "/worker/capabilities") {
-      if (!authorized(req)) return json(res, 401, { error: "worker_auth_required" });
+      if (!(await authorized(req))) return json(res, 401, { error: "worker_auth_required" });
       return json(res, 200, { ...capabilities(), runtimeProviders: await providerHealth() });
     }
 
