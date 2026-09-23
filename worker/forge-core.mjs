@@ -305,10 +305,19 @@ async function recordBuild(pool,{runId,projectSlug,prompt,artifacts,result,gener
   return {projectId,snapshotId};
 }
 
+async function advanceRunSteps(pool,runId,{activeStage,status="running",completedStages=[]}={}) {
+  if(!pool)return;
+  if(completedStages.length) await pool.query("UPDATE ai_run_steps SET status='done' WHERE run_id=$1 AND stage=ANY($2::text[])",[runId,completedStages]);
+  if(activeStage) await pool.query("UPDATE ai_run_steps SET status=$1 WHERE run_id=$2 AND stage=$3 AND status NOT IN ('done','rejected')",[status,runId,activeStage]);
+}
+
 export async function buildAndPersist(pool,{runId,projectSlug,prompt,execute}) {
+  await advanceRunSteps(pool,runId,{activeStage:"build",status:"running",completedStages:["brain","plan"]});
   const generation=await aiGenerate(prompt);
   const result=await execute(runId,generation.artifacts);
+  await advanceRunSteps(pool,runId,{activeStage:"test",status:result.state==="passed"?"done":"failed",completedStages:["build"]});
   const persistence=await recordBuild(pool,{runId,projectSlug,prompt,artifacts:generation.artifacts,result,generation});
+  await advanceRunSteps(pool,runId,{activeStage:"review",status:result.state==="passed"?"awaiting_review":"failed",completedStages:result.state==="passed"?["test"]:[]});
   return {...result,generationMode:generation.mode,provider:generation.provider,model:generation.model,sourceFiles:generation.artifacts,projectId:persistence?.projectId||null,snapshotId:persistence?.snapshotId||null};
 }
 
