@@ -289,7 +289,7 @@ async function recordBuild(pool,{runId,projectSlug,prompt,artifacts,result,gener
   for(const file of artifacts) await pool.query("INSERT INTO source_files(id,snapshot_id,path,kind,language,loc,status,content) VALUES($1,$2,$3,'file',$4,$5,'generated',$6)",[randomUUID(),snapshotId,file.path,file.language||"text",String(file.content||"").split("\n").length,file.content]);
   const passed=result.state==="passed"&&result.simulated===false;
   const testRunId=randomUUID();
-  await pool.query("INSERT INTO test_runs(id,project_id,snapshot_id,status) VALUES($1,$2,$3,$4)",[testRunId,projectId,snapshotId,passed?"passed":"failed"]);
+  await pool.query("INSERT INTO test_runs(id,project_id,run_id,snapshot_id,status) VALUES($1,$2,$3,$4,$5)",[testRunId,projectId,runId,snapshotId,passed?"passed":"failed"]);
   await pool.query("INSERT INTO test_results(id,test_run_id,name,suite,status,duration_ms,detail) VALUES($1,$2,'real build','execution',$3,$4,$5)",[randomUUID(),testRunId,passed?"passed":"failed",Number(result?.build?.durationMs||result?.install?.durationMs||0),JSON.stringify(result)]);
   await pool.query("INSERT INTO ai_events(id,run_id,level,stage,message) VALUES($1,$2,$3,'test',$4)",[randomUUID(),runId,passed?"info":"error",passed?"Real build verification passed.":"Real build verification failed during "+result.phase+"."]);
   await pool.query("INSERT INTO audit_events(id,project_id,actor,actor_name,action,target,risk,approved,diff_summary,stage) VALUES($1,$2,'system','ForgeOS',$3,$4,'low',NULL,$5,'test')",[randomUUID(),projectId,passed?"real_build_passed":"real_build_failed",runId,result.error||result.phase]);
