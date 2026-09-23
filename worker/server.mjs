@@ -150,10 +150,10 @@ const server = http.createServer(async (req, res) => {
       const deployment=await selectedDeploy.provider.deploy({token,projectName:("forgeos-"+projectSlug+"-"+runId.slice(0,8)).toLowerCase(),files,environment});
       const deploymentId=randomUUID();
       const snapshot=(await pool.query("SELECT id FROM source_snapshots WHERE project_id=$1 ORDER BY created_at DESC LIMIT 1",[run.project_id])).rows[0]?.id || null;
-      await pool.query("INSERT INTO deployments(id,project_id,env,status,commit_sha,url,adapter,simulated) VALUES($1,$2,$3,$4,$5,$6,$7,false)",[deploymentId,run.project_id,environment,deployment.state||"building",snapshot||"",deployment.url||"",selectedDeploy.provider.id]);
+      await pool.query("INSERT INTO deployments(id,project_id,run_id,env,status,commit_sha,url,adapter,simulated) VALUES($1,$2,$3,$4,$5,$6,$7,$8,false)",[deploymentId,run.project_id,runId,environment,deployment.state||"building",snapshot||"",deployment.url||"",selectedDeploy.provider.id]);
       await pool.query("INSERT INTO deployment_observations(id,deployment_id,status,url,provider_job_id,simulated,detail) VALUES($1,$2,$3,$4,$5,false,$6::jsonb)",[randomUUID(),deploymentId,deployment.state||"building",deployment.url||"",deployment.deploymentId||null,JSON.stringify(deployment)]);
       await pool.query("INSERT INTO audit_events(id,project_id,actor,actor_name,action,target,risk,approved,diff_summary,stage) VALUES($1,$2,'system','ForgeOS','deploy',$3,'critical',$4,$5,'deploying')",[randomUUID(),run.project_id,environment,true,"Real deployment provider invoked: "+selectedDeploy.provider.id+"."]);
-      await pool.query("UPDATE ai_runs SET status='deploying',completed_at=now() WHERE id=$1",[runId]);
+      await pool.query("UPDATE ai_runs SET status='deploying',completed_at=NULL WHERE id=$1",[runId]);
       return json(res,200,{state:"deploying",simulated:false,deployment});
     }
 
@@ -165,9 +165,9 @@ const server = http.createServer(async (req, res) => {
       const runId = url.searchParams.get("runId");
       let row;
       if (deploymentId) {
-        row = (await pool.query("SELECT d.id,d.project_id,d.status,d.url,d.adapter,d.created_at,do.provider_job_id FROM deployments d LEFT JOIN LATERAL (SELECT provider_job_id FROM deployment_observations WHERE deployment_id=d.id ORDER BY observed_at DESC LIMIT 1) do ON true WHERE d.id=$1 LIMIT 1",[deploymentId])).rows[0];
+        row = (await pool.query("SELECT d.id,d.project_id,d.run_id,d.status,d.url,d.adapter,d.created_at,do.provider_job_id FROM deployments d LEFT JOIN LATERAL (SELECT provider_job_id FROM deployment_observations WHERE deployment_id=d.id ORDER BY observed_at DESC LIMIT 1) do ON true WHERE d.id=$1 LIMIT 1",[deploymentId])).rows[0];
       } else if (runId) {
-        row = (await pool.query("SELECT d.id,d.project_id,d.status,d.url,d.adapter,d.created_at,do.provider_job_id FROM ai_runs ar JOIN deployments d ON d.project_id=ar.project_id LEFT JOIN LATERAL (SELECT provider_job_id FROM deployment_observations WHERE deployment_id=d.id ORDER BY observed_at DESC LIMIT 1) do ON true WHERE ar.id=$1 ORDER BY d.created_at DESC LIMIT 1",[runId])).rows[0];
+        row = (await pool.query("SELECT d.id,d.project_id,d.run_id,d.status,d.url,d.adapter,d.created_at,do.provider_job_id FROM ai_runs ar JOIN deployments d ON d.run_id=ar.id LEFT JOIN LATERAL (SELECT provider_job_id FROM deployment_observations WHERE deployment_id=d.id ORDER BY observed_at DESC LIMIT 1) do ON true WHERE ar.id=$1 ORDER BY d.created_at DESC LIMIT 1",[runId])).rows[0];
       } else {
         return json(res, 400, { error: "deploymentId_or_runId_required" });
       }
@@ -193,9 +193,9 @@ const server = http.createServer(async (req, res) => {
       await pool.query("UPDATE deployments SET status=$1,url=$2 WHERE id=$3",[normalized,observed.url||row.url||"",row.id]);
       await pool.query("INSERT INTO deployment_observations(id,deployment_id,status,url,provider_job_id,simulated,detail) VALUES($1,$2,$3,$4,$5,false,$6::jsonb)",[randomUUID(),row.id,normalized,observed.url||row.url||"",observed.deploymentId||row.provider_job_id||null,JSON.stringify(observed)]);
       if (normalized === "ready") {
-        await pool.query("UPDATE ai_runs SET status='deployed' WHERE project_id=$1 AND status='deploying'",[row.project_id]);
+        await pool.query("UPDATE ai_runs SET status='deployed',completed_at=now() WHERE id=$1 AND status='deploying'",[row.run_id]);
       } else if (normalized === "failed") {
-        await pool.query("UPDATE ai_runs SET status='failed' WHERE project_id=$1 AND status='deploying'",[row.project_id]);
+        await pool.query("UPDATE ai_runs SET status='failed',completed_at=now() WHERE id=$1 AND status='deploying'",[row.run_id]);
       }
       return json(res, 200, { state: normalized, simulated: false, deployment: { id: row.id, provider: row.adapter, providerStatus: observed.state, deploymentId: observed.deploymentId, url: observed.url||row.url||null, environment: observed.environment||null } });
     }
