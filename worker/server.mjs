@@ -10,6 +10,7 @@ import { createStorageProvider } from "./providers/storage-provider.mjs";
 import { buildAndPersist, repairAndBuild, autoRepairAndBuild, latestSource, capabilities, readProject, listProjects, createProject } from "./forge-core.mjs";
 import { runMigrations } from "./migrate.mjs";
 import { prepareBuild, approveBuild, assertApproved } from "./approval-core.mjs";
+import { transitionRun } from "./run-state.mjs";
 
 const PORT = Number(process.env.PORT || 8080);
 const WORKER_TOKEN = process.env.FORGEOS_WORKER_TOKEN || "";
@@ -202,7 +203,7 @@ const server = http.createServer(async (req, res) => {
       await pool.query("INSERT INTO deployments(id,project_id,run_id,env,status,commit_sha,url,adapter,simulated) VALUES($1,$2,$3,$4,$5,$6,$7,$8,false)",[deploymentId,run.project_id,runId,environment,deployment.state||"building",snapshot||"",deployment.url||"",selectedDeploy.provider.id]);
       await pool.query("INSERT INTO deployment_observations(id,deployment_id,status,url,provider_job_id,simulated,detail) VALUES($1,$2,$3,$4,$5,false,$6::jsonb)",[randomUUID(),deploymentId,deployment.state||"building",deployment.url||"",deployment.deploymentId||null,JSON.stringify(deployment)]);
       await pool.query("INSERT INTO audit_events(id,project_id,actor,actor_name,action,target,risk,approved,diff_summary,stage) VALUES($1,$2,'system','ForgeOS','deploy',$3,'critical',$4,$5,'deploying')",[randomUUID(),run.project_id,environment,true,"Real deployment provider invoked: "+selectedDeploy.provider.id+"."]);
-      await pool.query("UPDATE ai_runs SET status='deploying',completed_at=NULL WHERE id=$1",[runId]);
+      await transitionRun(pool,runId,"deploying",{eventStage:"deploying",message:"Deployment provider accepted the deployment request."});
       await pool.query("UPDATE ai_run_steps SET status='done' WHERE run_id=$1 AND stage='review' AND status NOT IN ('rejected')",[runId]);
       await pool.query("UPDATE ai_run_steps SET status='running' WHERE run_id=$1 AND stage='deploy' AND status NOT IN ('done','rejected')",[runId]);
       return json(res,200,{state:"deploying",simulated:false,deployment});
@@ -244,10 +245,10 @@ const server = http.createServer(async (req, res) => {
       await pool.query("UPDATE deployments SET status=$1,url=$2 WHERE id=$3",[normalized,observed.url||row.url||"",row.id]);
       await pool.query("INSERT INTO deployment_observations(id,deployment_id,status,url,provider_job_id,simulated,detail) VALUES($1,$2,$3,$4,$5,false,$6::jsonb)",[randomUUID(),row.id,normalized,observed.url||row.url||"",observed.deploymentId||row.provider_job_id||null,JSON.stringify(observed)]);
       if (normalized === "ready") {
-        await pool.query("UPDATE ai_runs SET status='deployed',completed_at=now() WHERE id=$1 AND status='deploying'",[row.run_id]);
+        await transitionRun(pool,row.run_id,"deployed",{eventStage:"deploy",message:"Deployment provider reports the deployment is ready."}).catch(()=>{});
         await pool.query("UPDATE ai_run_steps SET status='done' WHERE run_id=$1 AND stage='deploy'",[row.run_id]);
       } else if (normalized === "failed") {
-        await pool.query("UPDATE ai_runs SET status='failed',completed_at=now() WHERE id=$1 AND status='deploying'",[row.run_id]);
+        await transitionRun(pool,row.run_id,"failed",{eventStage:"deploy",message:"Deployment provider reports deployment failure.",level:"error"}).catch(()=>{});
         await pool.query("UPDATE ai_run_steps SET status='failed' WHERE run_id=$1 AND stage='deploy' AND status NOT IN ('done','rejected')",[row.run_id]);
       }
       return json(res, 200, { state: normalized, simulated: false, deployment: { id: row.id, provider: row.adapter, providerStatus: observed.state, deploymentId: observed.deploymentId, url: observed.url||row.url||null, environment: observed.environment||null } });
@@ -363,7 +364,7 @@ const server = http.createServer(async (req, res) => {
       const run=(await pool.query("SELECT id,status FROM ai_runs WHERE id=$1 LIMIT 1",[payload.runId])).rows[0];
       if(!run)return json(res,404,{error:"run_not_found"});
       if(run.status!=="recovery_required")return json(res,409,{error:"run_not_recoverable",status:run.status});
-      await pool.query("UPDATE ai_runs SET status='executing',completed_at=NULL,updated_at=now() WHERE id=$1",[payload.runId]);
+      await transitionRun(pool,payload.runId,"executing",{eventStage:"recovery",message:"Run explicitly recovered after worker interruption."});
       await pool.query("INSERT INTO ai_events(id,run_id,level,stage,message) VALUES($1,$2,'info','recovery','Run explicitly recovered after worker interruption.')",[randomUUID(),payload.runId]);
       return json(res,200,{state:"recovered",simulated:false,runId:payload.runId});
     }
@@ -378,7 +379,7 @@ const server = http.createServer(async (req, res) => {
       const run=(await pool.query("SELECT id,status FROM ai_runs WHERE id=$1 LIMIT 1",[payload.runId])).rows[0];
       if(!run)return json(res,404,{error:"run_not_found"});
       if(["deployed","failed","cancelled","rejected"].includes(run.status))return json(res,409,{error:"run_already_terminal",status:run.status});
-      await pool.query("UPDATE ai_runs SET status='cancelled',completed_at=now(),updated_at=now() WHERE id=$1",[payload.runId]);
+      await transitionRun(pool,payload.runId,"cancelled",{eventStage:"cancelled",message:"Run cancelled by user."});
       await pool.query("UPDATE provider_attempts SET status='cancelled',completed_at=now(),error=coalesce(error,'cancelled_by_user') WHERE run_id=$1 AND status IN ('running','pending')",[payload.runId]);
       await pool.query("UPDATE ai_run_steps SET status='cancelled' WHERE run_id=$1 AND status IN ('running','pending','awaiting_review')",[payload.runId]);
       await pool.query("INSERT INTO ai_events(id,run_id,level,stage,message) VALUES($1,$2,'info','cancelled','Run cancelled by user.')",[randomUUID(),payload.runId]);
