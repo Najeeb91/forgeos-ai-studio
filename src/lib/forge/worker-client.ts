@@ -49,3 +49,13 @@ export async function createForgeProject(input:{slug:string;name:string;prompt:s
   if(payload.simulated!==false)throw new Error("Project creation was not reported as real");
   return payload;
 }
+
+export async function getDeploymentStatus(runId:string):Promise<any>{
+  const {url,token}=workerConfig();
+  const response=await fetch(url+"/worker/deploy/status?runId="+encodeURIComponent(runId),{headers:{authorization:"Bearer "+token}});
+  const text=await response.text();
+  let payload:any; try{payload=JSON.parse(text)}catch{throw new Error("Deployment status worker returned invalid JSON (HTTP "+response.status+")");}
+  if(!response.ok)throw new Error(payload.error||"Deployment status failed with HTTP "+response.status);
+  if(payload.simulated!==false)throw new Error("Deployment status was not reported as real");
+  return payload;
+}
