@@ -399,6 +399,7 @@ export async function repairAndBuild({pool=null,runId,projectSlug="forgeos",prom
   const selected = await selectProvider(aiProviders, preferredAIProvider);
   let generated=null;
   let selectedProvider=null;
+  const repairProjectId = pool ? (await pool.query("SELECT project_id FROM ai_runs WHERE id=$1 LIMIT 1",[runId])).rows[0]?.project_id : null;
   const providerAttempts=[];
   for (const candidate of selected.candidates || [{provider:selected.provider,health:selected.health}]) {
     const provider=candidate.provider;
@@ -407,7 +408,7 @@ export async function repairAndBuild({pool=null,runId,projectSlug="forgeos",prom
       continue;
     }
     const attemptId=randomUUID();
-    if(pool) await pool.query("INSERT INTO provider_attempts(id,run_id,kind,provider,capability,status,priority,simulated) VALUES($1,$2,'repair',$3,'ai','running',$4,false)",[attemptId,runId,provider.id,candidate.health?.priority||0]).catch(()=>{});
+    if(pool) await pool.query("INSERT INTO provider_attempts(id,run_id,kind,provider,capability,status,priority,simulated) VALUES($1,$2,$3,'repair',$4,'ai','running',$5,false)",[attemptId,repairProjectId,runId,provider.id,candidate.health?.priority||0]).catch(()=>{});
     try {
       generated=await provider.repair({prompt,files,failure});
       selectedProvider=provider;
