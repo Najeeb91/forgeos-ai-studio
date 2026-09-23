@@ -279,7 +279,8 @@ async function recordBuild(pool,{runId,projectSlug,prompt,artifacts,result,gener
   );
   await pool.query("INSERT INTO project_memory_entries(id,project_id,kind,title,content,author_type,source,provenance_run_id,provenance_brain_version_id) VALUES($1,$2,'milestone',$3,$4,'system','brain-projection',$5,$6)",[randomUUID(),projectId,"Project Brain version "+brainVersion,"Brain projection updated from the latest Builder requirement.",runId,brainVersionId]);
   const providerAttemptId=randomUUID();
-  await pool.query("INSERT INTO provider_attempts(id,project_id,run_id,kind,provider,capability,status,simulated) VALUES($1,$2,$3,'execution',$4,'source-build','running',false)",[providerAttemptId,projectId,runId,generation.provider||"http-executor"]);
+  const executionProvider=result.provider || result.providerSelection?.selected || generation.provider || "http-executor";
+  await pool.query("INSERT INTO provider_attempts(id,project_id,run_id,kind,provider,capability,status,simulated) VALUES($1,$2,$3,'execution',$4,'source-build','running',false)",[providerAttemptId,projectId,runId,executionProvider]);
   await pool.query("INSERT INTO ai_runs(id,project_id,prompt,provider,model,status,tokens_in,tokens_out) VALUES($1,$2,$3,$4,$5,'testing',$6,$7) ON CONFLICT(id) DO UPDATE SET status='testing'",[runId,projectId,prompt,generation.provider,generation.model,Number(generation.usage?.prompt_tokens||0),Number(generation.usage?.completion_tokens||0)]);
   await recordPlan(pool,runId);
   await pool.query("INSERT INTO ai_events(id,run_id,level,stage,message) VALUES($1,$2,'info','brain',$3)",[randomUUID(),runId,"Requirement accepted by ForgeOS."]);
@@ -298,9 +299,13 @@ async function recordBuild(pool,{runId,projectSlug,prompt,artifacts,result,gener
     passed ? "succeeded" : "failed",
     result.jobId || null,
     result.error || result.build?.error || result.install?.error || null,
-    JSON.stringify({phase:result.phase || null, state:result.state || null, generationMode:generation.mode, provider:generation.provider, model:generation.model}),
+    JSON.stringify({phase:result.phase || null, state:result.state || null, generationMode:generation.mode, provider:generation.provider, model:generation.model,providerAttempts:result.providerAttempts||[]}),
     providerAttemptId
   ]);
+  for(const attempt of (result.providerAttempts||[])){
+    if(attempt.provider===executionProvider) continue;
+    await pool.query("INSERT INTO provider_attempts(id,project_id,run_id,kind,provider,capability,status,simulated,error,completed_at) VALUES($1,$2,$3,'execution',$4,'source-build',$5,false,$6,now())",[randomUUID(),projectId,runId,attempt.provider,attempt.status==="succeeded"?"succeeded":"failed",attempt.error||null]);
+  }
   await pool.query("UPDATE conversations SET updated_at=now() WHERE id=$1",[conversationId]);
   return {projectId,snapshotId};
 }
