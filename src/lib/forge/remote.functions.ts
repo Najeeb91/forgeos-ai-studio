@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { projects as seedProjects } from "./data";
-import { createForgeProject, getProjectFromWorker } from "./worker-client";
+import { createForgeProject as createForgeProjectWorker, getProjectFromWorker } from "./worker-client";
 import { listForgeProviders as listConfiguredProviders } from "./provider-routing";
 
 export const getForgeProject = createServerFn({ method: "GET" })
@@ -31,4 +31,4 @@ export const listForgeProviders = createServerFn({ method: "GET" }).handler(asyn
 
 export const createForgeProjectRemote = createServerFn({ method: "POST" })
   .validator((data: { slug: string; name: string; prompt: string }) => data)
-  .handler(async ({ data }) => createForgeProject(data));
+  .handler(async ({ data }) => createForgeProjectWorker(data));
