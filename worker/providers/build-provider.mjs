@@ -114,6 +114,10 @@ export class DockerBuildProvider {
   }
 }
 
+export function createBuildProviders() {
+  return [new DockerBuildProvider(), new LocalProcessBuildProvider()];
+}
+
 export function createBuildProvider() {
   const provider = process.env.FORGEOS_BUILD_PROVIDER || "local-process";
   if (provider === "local-process") return new LocalProcessBuildProvider();
