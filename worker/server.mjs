@@ -186,30 +186,44 @@ const server = http.createServer(async (req, res) => {
       const files=await latestSource(pool,projectSlug,runId);
       if (!files.length) return json(res, 409, { error:"source_required" });
       const selectedDeploy=await selectProvider(deployProviders, preferredDeployProvider);
-      const deploySecret=await secretsProvider.get(selectedDeploy.provider.id === "netlify" ? "NETLIFY_AUTH_TOKEN" : "VERCEL_TOKEN");
-      const token=deploySecret?.value || "";
-      const providerAttemptId=randomUUID();
-      await pool.query("INSERT INTO provider_attempts(id,project_id,run_id,kind,provider,capability,status,priority,simulated) VALUES($1,$2,$3,'deploy',$4,'deploy','running',$5,false)",[providerAttemptId,run.project_id,runId,selectedDeploy.provider.id,selectedDeploy.health?.priority||0]).catch(()=>{});
-      let deployment;
-      try {
-        deployment=await selectedDeploy.provider.deploy({token,projectName:("forgeos-"+projectSlug+"-"+runId.slice(0,8)).toLowerCase(),files,environment});
-      } catch (error) {
-        const message=error instanceof Error?error.message:String(error);
-        await pool.query("UPDATE provider_attempts SET status='failed',completed_at=now(),error=$1 WHERE id=$2",[message,providerAttemptId]).catch(()=>{});
-        await pool.query("UPDATE ai_runs SET status='failed',completed_at=now() WHERE id=$1",[runId]).catch(()=>{});
-        await pool.query("INSERT INTO audit_events(id,project_id,actor,actor_name,action,target,risk,approved,diff_summary,stage) VALUES($1,$2,'system','ForgeOS','deploy_failed',$3,'critical',true,$4,'deploying')",[randomUUID(),run.project_id,environment,message]).catch(()=>{});
-        return json(res,502,{state:"failed",simulated:false,error:message,provider:selectedDeploy.provider.id});
+      let deployment=null;
+      let selectedProvider=null;
+      const providerAttempts=[];
+      for (const candidate of selectedDeploy.candidates || [{provider:selectedDeploy.provider,health:selectedDeploy.health}]) {
+        const provider=candidate.provider;
+        const secretName=provider.id === "netlify" ? "NETLIFY_AUTH_TOKEN" : "VERCEL_TOKEN";
+        const deploySecret=await secretsProvider.get(secretName);
+        const token=deploySecret?.value || "";
+        const providerAttemptId=randomUUID();
+        await pool.query("INSERT INTO provider_attempts(id,project_id,run_id,kind,provider,capability,status,priority,simulated) VALUES($1,$2,$3,'deploy',$4,'deploy','running',$5,false)",[providerAttemptId,run.project_id,runId,provider.id,candidate.health?.priority||0]).catch(()=>{});
+        try {
+          deployment=await provider.deploy({token,projectName:("forgeos-"+projectSlug+"-"+runId.slice(0,8)).toLowerCase(),files,environment});
+          selectedProvider=provider;
+          providerAttempts.push({provider:provider.id,status:"succeeded"});
+          await pool.query("UPDATE provider_attempts SET status='succeeded',completed_at=now(),job_id=$1,observations=$2::jsonb WHERE id=$3",[deployment.deploymentId||null,JSON.stringify({state:deployment.state,url:deployment.url,provider:provider.id}),providerAttemptId]).catch(()=>{});
+          break;
+        } catch (error) {
+          const message=error instanceof Error?error.message:String(error);
+          providerAttempts.push({provider:provider.id,status:"failed",error:message});
+          await pool.query("UPDATE provider_attempts SET status='failed',completed_at=now(),error=$1 WHERE id=$2",[message,providerAttemptId]).catch(()=>{});
+        }
       }
-      await pool.query("UPDATE provider_attempts SET status='succeeded',completed_at=now(),job_id=$1,observations=$2::jsonb WHERE id=$3",[deployment.deploymentId||null,JSON.stringify({state:deployment.state,url:deployment.url,provider:selectedDeploy.provider.id}),providerAttemptId]).catch(()=>{});
+      if (!deployment || !selectedProvider) {
+        const message=providerAttempts.map((a)=>a.provider+":"+a.error).join(";") || "all_deploy_providers_failed";
+        await transitionRun(pool,runId,"failed",{eventStage:"deploying",message:"All deployment providers failed: "+message,level:"error"}).catch(()=>{});
+        await pool.query("INSERT INTO audit_events(id,project_id,actor,actor_name,action,target,risk,approved,diff_summary,stage) VALUES($1,$2,'system','ForgeOS','deploy_failed',$3,'critical',true,$4,'deploying')",[randomUUID(),run.project_id,environment,message]).catch(()=>{});
+        return json(res,502,{state:"failed",simulated:false,error:message,providerAttempts});
+      }
+      await pool.query("UPDATE provider_attempts SET status='succeeded',completed_at=now(),job_id=$1,observations=$2::jsonb WHERE id=$3",[deployment.deploymentId||null,JSON.stringify({state:deployment.state,url:deployment.url,provider:selectedProvider.id}),providerAttemptId]).catch(()=>{});
       const deploymentId=randomUUID();
       const snapshot=(await pool.query("SELECT id FROM source_snapshots WHERE run_id=$1 ORDER BY created_at DESC LIMIT 1",[runId])).rows[0]?.id || null;
       await pool.query("INSERT INTO deployments(id,project_id,run_id,env,status,commit_sha,url,adapter,simulated) VALUES($1,$2,$3,$4,$5,$6,$7,$8,false)",[deploymentId,run.project_id,runId,environment,deployment.state||"building",snapshot||"",deployment.url||"",selectedDeploy.provider.id]);
       await pool.query("INSERT INTO deployment_observations(id,deployment_id,status,url,provider_job_id,simulated,detail) VALUES($1,$2,$3,$4,$5,false,$6::jsonb)",[randomUUID(),deploymentId,deployment.state||"building",deployment.url||"",deployment.deploymentId||null,JSON.stringify(deployment)]);
-      await pool.query("INSERT INTO audit_events(id,project_id,actor,actor_name,action,target,risk,approved,diff_summary,stage) VALUES($1,$2,'system','ForgeOS','deploy',$3,'critical',$4,$5,'deploying')",[randomUUID(),run.project_id,environment,true,"Real deployment provider invoked: "+selectedDeploy.provider.id+"."]);
+      await pool.query("INSERT INTO audit_events(id,project_id,actor,actor_name,action,target,risk,approved,diff_summary,stage) VALUES($1,$2,'system','ForgeOS','deploy',$3,'critical',$4,$5,'deploying')",[randomUUID(),run.project_id,environment,true,"Real deployment provider invoked: "+selectedProvider.id+". Attempts: "+JSON.stringify(providerAttempts)]);
       await transitionRun(pool,runId,"deploying",{eventStage:"deploying",message:"Deployment provider accepted the deployment request."});
       await pool.query("UPDATE ai_run_steps SET status='done' WHERE run_id=$1 AND stage='review' AND status NOT IN ('rejected')",[runId]);
       await pool.query("UPDATE ai_run_steps SET status='running' WHERE run_id=$1 AND stage='deploy' AND status NOT IN ('done','rejected')",[runId]);
-      return json(res,200,{state:"deploying",simulated:false,deployment});
+      return json(res,200,{state:"deploying",simulated:false,deployment,provider:selectedProvider.id,providerAttempts});
     }
 
     if (req.method === "GET" && req.url?.startsWith("/worker/deploy/status")) {
