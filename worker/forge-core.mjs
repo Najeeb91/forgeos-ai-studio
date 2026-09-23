@@ -288,15 +288,13 @@ export async function buildAndPersist(pool,{runId,projectSlug,prompt,execute}) {
 }
 
 export async function repairAndBuild({runId,prompt,files,failure,execute}) {
-  const c=aiConfig();
-  if(!c.apiKey) throw new Error("ai_provider_not_configured");
-  const response=await fetch(c.baseUrl+"/chat/completions",{method:"POST",headers:{"content-type":"application/json",authorization:"Bearer "+c.apiKey},body:JSON.stringify({model:c.model,temperature:0.1,max_tokens:12000,messages:[{role:"system",content:"You are the ForgeOS bounded repair engine. Return JSON only. Repair the supplied Vite React application so npm run build succeeds. Preserve the requirement and useful behavior. Return the complete corrected file set. Keep build exactly vite build and do not add lifecycle scripts or credentials."},{role:"user",content:"Requirement:\\n"+String(prompt).slice(0,4000)+"\\n\\nFailure:\\n"+JSON.stringify(failure).slice(0,12000)+"\\n\\nCurrent source:\\n"+files.map((f)=>"--- "+f.path+" ---\\n"+f.content).join("\\n").slice(0,60000)}],response_format:{type:"json_object"}})});
-  const body=await response.json().catch(()=>({}));
-  if(!response.ok)throw new Error(body?.error?.message||"ai_repair_failed");
-  const parsed=JSON.parse(body?.choices?.[0]?.message?.content||"{}");
-  const artifacts=validateArtifacts(parsed.artifacts);
-  const result=await execute(runId,artifacts);
-  return {...result,repairSimulated:false,generationMode:"ai-repair",provider:c.provider,model:c.model,sourceFiles:artifacts};
+  const selected = await selectProvider(aiProviders, preferredAIProvider);
+  if (typeof selected.provider.repair !== "function") throw new Error("selected_ai_provider_cannot_repair");
+  const generated = await selected.provider.repair({prompt,files,failure});
+  const artifacts = validateArtifacts(generated.artifacts);
+  const result = await execute(runId,artifacts);
+  return {...result,repairSimulated:false,generationMode:"ai-repair",provider:selected.provider.id,model:generated.model,sourceFiles:artifacts,
+    providerSelection:{selected:selected.provider.id,preferred:preferredAIProvider,failover:selected.provider.id!==preferredAIProvider}};
 }
 
 export async function latestSource(pool, projectSlug) {
