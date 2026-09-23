@@ -23,3 +23,7 @@ Planned:
 The worker API and ForgeOS persistence must not change when providers change. Provider-specific implementation belongs behind this boundary.
 
 Railway is not referenced by the build provider itself. A Railway deployment can use Docker mode only when its runtime exposes a Docker daemon/image; otherwise keep `local-process` or move execution to a dedicated host/worker.
+
+## Runtime health
+
+The worker exposes provider health through `/worker/capabilities`. Each active provider reports its capability, configuration state, and whether real execution/deployment is available. Provider selection remains environment-driven and provider-specific health does not alter ForgeOS persistence or lifecycle state.
