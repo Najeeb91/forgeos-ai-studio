@@ -11,6 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { PageBody, PageHeader, Panel, WorkspaceShell } from "@/components/forge/shell";
 import { Pill } from "@/components/forge/status";
 import { STAGE_ORDER } from "@/lib/forge/data";
+import { createForgeProjectRemote } from "@/lib/forge/remote.functions";
 
 export const Route = createFileRoute("/new")({
   head: () => ({
@@ -44,6 +45,7 @@ function NewProject() {
   const [name, setName] = useState("");
   const [idea, setIdea] = useState("");
   const [autoApprove, setAutoApprove] = useState(false);
+  const [creating, setCreating] = useState(false);
 
   return (
     <WorkspaceShell>
@@ -70,8 +72,18 @@ function NewProject() {
                   toast.error("Describe the idea in a little more detail first.");
                   return;
                 }
-                toast.success("Intent captured — opening the builder on the benchmark project.");
-                void navigate({ to: "/projects/$slug/builder", params: { slug: "pumpos" } });
+                const projectName = name.trim() || "Untitled ForgeOS Project";
+                const slug = projectName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 63) || "forgeos-project";
+                setCreating(true);
+                try {
+                  await createForgeProjectRemote({ data: { slug, name: projectName, prompt: idea.trim() } });
+                  toast.success("Project created — opening its builder.");
+                  await navigate({ to: "/projects/$slug/builder", params: { slug } });
+                } catch (error) {
+                  toast.error(error instanceof Error ? error.message : "Project creation failed");
+                } finally {
+                  setCreating(false);
+                }
               }}
             >
               <div className="space-y-2">
@@ -110,9 +122,9 @@ function NewProject() {
                 <Switch checked={autoApprove} onCheckedChange={setAutoApprove} />
               </div>
 
-              <Button type="submit" className="w-full sm:w-auto">
+              <Button type="submit" className="w-full sm:w-auto" disabled={creating}>
                 <Wand2 className="size-4" />
-                Draft requirements and plan
+                {creating ? "Creating project…" : "Draft requirements and plan"}
               </Button>
             </form>
           </Panel>
