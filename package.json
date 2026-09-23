@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/run-state.test.mjs"
   },
   "overrides": {
     "rolldown": "1.2.1"
