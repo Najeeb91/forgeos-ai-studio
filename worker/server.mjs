@@ -251,7 +251,9 @@ const server = http.createServer(async (req, res) => {
       if (!authorized(req)) return json(res, 401, { error: "worker_auth_required" });
       const payload = await body(req);
       const result = await repairAndBuild({
+        pool,
         runId: payload.runId || randomUUID(),
+        projectSlug: payload.projectSlug || "forgeos",
         prompt: payload.prompt || "",
         files: payload.files || [],
         failure: payload.failure || "real build failed",
