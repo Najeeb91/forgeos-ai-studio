@@ -92,6 +92,11 @@ export async function approveBuild(pool, { runId, approvalId, decision, actorId 
     "UPDATE ai_runs SET status=$1,updated_at=now() WHERE id=$2",
     [nextRunState, runId]
   );
+  if (approval.action_type === "deploy_production" && normalized === "approved") {
+    await pool.query("UPDATE ai_run_steps SET status='running' WHERE run_id=$1 AND stage='deploy' AND status NOT IN ('done','rejected')",[runId]);
+  } else if (normalized === "approved") {
+    await pool.query("UPDATE ai_run_steps SET status='running' WHERE run_id=$1 AND stage='test' AND status NOT IN ('done','rejected')",[runId]);
+  }
   await pool.query(
     "INSERT INTO ai_events(id,run_id,level,stage,message) VALUES($1,$2,'approval','approval',$3)",
     [randomUUID(), runId, "Human approval decision: " + normalized]
