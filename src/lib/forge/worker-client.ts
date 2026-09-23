@@ -78,3 +78,13 @@ export async function recoverForgeRun(runId:string):Promise<any>{
   if(payload.simulated!==false)throw new Error("Run recovery was not durably recorded");
   return payload;
 }
+
+export async function getForgeRun(runId:string):Promise<any>{
+  const {url,token}=workerConfig();
+  const response=await fetch(url+"/worker/run/"+encodeURIComponent(runId),{headers:{authorization:"Bearer "+token}});
+  const text=await response.text();
+  let payload:any; try{payload=JSON.parse(text)}catch{throw new Error("Run history worker returned invalid JSON (HTTP "+response.status+")");}
+  if(!response.ok)throw new Error(payload.error||"Run history lookup failed with HTTP "+response.status);
+  if(payload.simulated!==false)throw new Error("Run history was not reported as real");
+  return payload;
+}
