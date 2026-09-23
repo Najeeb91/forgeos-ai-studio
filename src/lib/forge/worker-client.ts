@@ -69,3 +69,12 @@ export async function listProjectsFromWorker():Promise<any[]>{
   if(payload.simulated!==false)throw new Error("Project list was not reported as real");
   return Array.isArray(payload.projects) ? payload.projects : [];
 }
+
+export async function recoverForgeRun(runId:string):Promise<any>{
+  const {url,token}=workerConfig();
+  const response=await fetch(url+"/worker/run/recover",{method:"POST",headers:{"content-type":"application/json",authorization:"Bearer "+token},body:JSON.stringify({runId})});
+  const text=await response.text(); let payload:any; try{payload=JSON.parse(text)}catch{throw new Error("Run recovery worker returned invalid JSON (HTTP "+response.status+")");}
+  if(!response.ok)throw new Error(payload.error||"Run recovery failed with HTTP "+response.status);
+  if(payload.simulated!==false)throw new Error("Run recovery was not durably recorded");
+  return payload;
+}
