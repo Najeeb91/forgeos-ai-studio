@@ -365,7 +365,6 @@ const server = http.createServer(async (req, res) => {
       if(!run)return json(res,404,{error:"run_not_found"});
       if(run.status!=="recovery_required")return json(res,409,{error:"run_not_recoverable",status:run.status});
       await transitionRun(pool,payload.runId,"executing",{eventStage:"recovery",message:"Run explicitly recovered after worker interruption."});
-      await pool.query("INSERT INTO ai_events(id,run_id,level,stage,message) VALUES($1,$2,'info','recovery','Run explicitly recovered after worker interruption.')",[randomUUID(),payload.runId]);
       return json(res,200,{state:"recovered",simulated:false,runId:payload.runId});
     }
 
@@ -382,7 +381,6 @@ const server = http.createServer(async (req, res) => {
       await transitionRun(pool,payload.runId,"cancelled",{eventStage:"cancelled",message:"Run cancelled by user."});
       await pool.query("UPDATE provider_attempts SET status='cancelled',completed_at=now(),error=coalesce(error,'cancelled_by_user') WHERE run_id=$1 AND status IN ('running','pending')",[payload.runId]);
       await pool.query("UPDATE ai_run_steps SET status='cancelled' WHERE run_id=$1 AND status IN ('running','pending','awaiting_review')",[payload.runId]);
-      await pool.query("INSERT INTO ai_events(id,run_id,level,stage,message) VALUES($1,$2,'info','cancelled','Run cancelled by user.')",[randomUUID(),payload.runId]);
       return json(res,200,{accepted:true,cancelled:true,simulated:false,runId:payload.runId});
     }
 
