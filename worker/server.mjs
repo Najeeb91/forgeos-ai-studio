@@ -3,7 +3,7 @@ import { createBuildProviders } from "./providers/build-provider.mjs";
 import { createDeployProviders } from "./providers/deploy-provider.mjs";
 import { selectProvider, healthyProviders } from "./providers/registry.mjs";
 import { randomUUID } from "node:crypto";
-import { Pool } from "pg";
+import { createDatabaseProvider } from "./providers/database-provider.mjs";
 import { buildAndPersist, repairAndBuild, latestSource, capabilities, readProject } from "./forge-core.mjs";
 import { runMigrations } from "./migrate.mjs";
 import { prepareBuild, approveBuild, assertApproved } from "./approval-core.mjs";
@@ -16,7 +16,8 @@ const MAX_TOTAL_BYTES = 10 * 1024 * 1024;
 const MAX_DURATION_MS = 120000;
 const MAX_OUTPUT_BYTES = 2 * 1024 * 1024;
 
-const pool = DATABASE_URL ? new Pool({ connectionString: DATABASE_URL, max: 4 }) : null;
+const databaseProvider = createDatabaseProvider();
+const pool = databaseProvider.pool;
 
 function json(res, status, body) {
   const payload = JSON.stringify(body);
@@ -57,7 +58,7 @@ async function execute(runId, files) {
 
 async function providerHealth() {
   const checks = [];
-  for (const provider of [...buildProviders, ...deployProviders]) {
+  for (const provider of [...buildProviders, ...deployProviders, databaseProvider]) {
     try {
       checks.push(await provider.health());
     } catch (error) {
@@ -248,6 +249,6 @@ bootstrap().catch((error) => {
 });
 
 process.on("SIGTERM", async () => {
-  await pool?.end().catch(() => {});
+  await databaseProvider.close();
   server.close(() => process.exit(0));
 });
