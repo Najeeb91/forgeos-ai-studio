@@ -293,6 +293,9 @@ async function recordBuild(pool,{runId,projectSlug,prompt,artifacts,result,gener
     [brainVersionId,projectId,brainVersion,previousBrain?.vision||"Build complete real software from natural language.",JSON.stringify(requirements),JSON.stringify(previousBrain?.decisions||[]),JSON.stringify(previousBrain?.architecture||[{layer:"frontend",choice:"React + TypeScript",note:"canonical ForgeOS studio"},{layer:"execution",choice:"provider adapters",note:"replaceable execution infrastructure"}]),JSON.stringify(previousBrain?.schema||[]),JSON.stringify(previousBrain?.integrations||[])]
   );
   await pool.query("INSERT INTO project_memory_entries(id,project_id,kind,title,content,author_type,source,provenance_run_id,provenance_brain_version_id) VALUES($1,$2,'milestone',$3,$4,'system','brain-projection',$5,$6)",[randomUUID(),projectId,"Project Brain version "+brainVersion,"Brain projection updated from the latest Builder requirement.",runId,brainVersionId]);
+  for(const attempt of (generation.providerAttempts||[])){
+    await pool.query("INSERT INTO provider_attempts(id,project_id,run_id,kind,provider,capability,status,simulated,error,completed_at) VALUES($1,$2,$3,'generation',$4,'ai',$5,false,$6,now())",[randomUUID(),projectId,runId,attempt.provider,attempt.status==="succeeded"?"succeeded":"failed",attempt.error||null]);
+  }
   const providerAttemptId=randomUUID();
   const executionProvider=result.provider || result.providerSelection?.selected || generation.provider || "http-executor";
   await pool.query("INSERT INTO provider_attempts(id,project_id,run_id,kind,provider,capability,status,simulated) VALUES($1,$2,$3,'execution',$4,'source-build','running',false)",[providerAttemptId,projectId,runId,executionProvider]);
