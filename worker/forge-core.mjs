@@ -312,13 +312,35 @@ export async function buildAndPersist(pool,{runId,projectSlug,prompt,execute}) {
   return {...result,generationMode:generation.mode,provider:generation.provider,model:generation.model,sourceFiles:generation.artifacts,projectId:persistence?.projectId||null,snapshotId:persistence?.snapshotId||null};
 }
 
-export async function repairAndBuild({runId,prompt,files,failure,execute}) {
+async function persistRepair(pool,{runId,prompt,files,failure,result,generation,projectSlug="forgeos"}) {
+  if (!pool) return null;
+  const project = await pool.query("select id from projects where slug=$1 limit 1",[projectSlug]);
+  if (!project.rows[0]) return null;
+  const projectId=project.rows[0].id;
+  const snapshotId=randomUUID();
+  await pool.query("insert into source_snapshots(id,project_id,message) values($1,$2,$3)",[snapshotId,projectId,"AI repair source for run "+runId]);
+  for(const file of generation.artifacts){
+    await pool.query("insert into source_files(id,snapshot_id,path,kind,language,loc,status,content) values($1,$2,$3,'file',$4,$5,'generated',$6)",[randomUUID(),snapshotId,file.path,file.language||"text",String(file.content||"").split("\n").length,file.content]);
+  }
+  const passed=result.state==="passed" && result.simulated===false;
+  const testRunId=randomUUID();
+  await pool.query("insert into test_runs(id,project_id,snapshot_id,status) values($1,$2,$3,$4)",[testRunId,projectId,snapshotId,passed?"passed":"failed"]);
+  await pool.query("insert into test_results(id,test_run_id,name,suite,status,duration_ms,detail) values($1,$2,'AI repair build','repair',$3,$4,$5)",[randomUUID(),testRunId,passed?"passed":"failed",Number(result?.build?.durationMs||result?.install?.durationMs||0),JSON.stringify({failure,phase:result.phase,state:result.state})]);
+  await pool.query("insert into ai_events(id,run_id,level,stage,message) values($1,$2,$3,'repair',$4)",[randomUUID(),runId,passed?"info":"error",passed?"AI repair produced a build-verified source snapshot.":"AI repair attempt failed during real execution."]);
+  await pool.query("insert into audit_events(id,project_id,actor,actor_name,action,target,risk,approved,diff_summary,stage) values($1,$2,'system','ForgeOS',$3,$4,'medium',NULL,$5,'repair')",[randomUUID(),projectId,passed?"repair_passed":"repair_failed",runId,String(failure).slice(0,2000)]);
+  await pool.query("update ai_runs set status=$2,completed_at=case when $2='review' then now() else null end where id=$1",[runId,passed?"review":"repairing"]);
+  return {projectId,snapshotId,testRunId};
+}
+
+export async function repairAndBuild({pool=null,runId,projectSlug="forgeos",prompt,files,failure,execute}) {
   const selected = await selectProvider(aiProviders, preferredAIProvider);
   if (typeof selected.provider.repair !== "function") throw new Error("selected_ai_provider_cannot_repair");
   const generated = await selected.provider.repair({prompt,files,failure});
   const artifacts = validateArtifacts(generated.artifacts);
   const result = await execute(runId,artifacts);
+  const persistence=await persistRepair(pool,{runId,prompt,files,failure,result,generation:{...generated,artifacts},projectSlug});
   return {...result,repairSimulated:false,generationMode:"ai-repair",provider:generated.provider || selected.provider.id,model:generated.model,sourceFiles:artifacts,
+    projectId:persistence?.projectId||null,snapshotId:persistence?.snapshotId||null,testRunId:persistence?.testRunId||null,
     providerSelection:{selected:selected.provider.id,preferred:preferredAIProvider,failover:selected.provider.id!==preferredAIProvider}};
 }
 
