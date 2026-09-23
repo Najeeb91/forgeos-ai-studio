@@ -28,5 +28,5 @@ export async function selectProvider(providers, preferredId) {
     const detail = checks.map((entry) => entry.provider.id + ":" + (entry.health?.error || "unavailable")).join(",");
     throw new Error("no_healthy_provider:" + detail);
   }
-  return { provider: selected.provider, health: selected.health, checks, registry };
+  return { provider: selected.provider, health: selected.health, checks, registry, candidates: checks.filter((entry) => entry.health?.ok).map((entry) => ({ provider: entry.provider, health: entry.health })) };
 }
