@@ -300,7 +300,6 @@ async function recordBuild(pool,{runId,projectSlug,prompt,artifacts,result,gener
   const providerAttemptId=randomUUID();
   const executionProvider=result.provider || result.providerSelection?.selected || generation.provider || "http-executor";
   await pool.query("INSERT INTO provider_attempts(id,project_id,run_id,kind,provider,capability,status,simulated) VALUES($1,$2,$3,'execution',$4,'source-build','running',false)",[providerAttemptId,projectId,runId,executionProvider]);
-  await pool.query("INSERT INTO ai_runs(id,project_id,prompt,provider,model,status,tokens_in,tokens_out) VALUES($1,$2,$3,$4,$5,'testing',$6,$7) ON CONFLICT(id) DO UPDATE SET status='testing'",[runId,projectId,prompt,generation.provider,generation.model,Number(generation.usage?.prompt_tokens||0),Number(generation.usage?.completion_tokens||0)]);
   await recordPlan(pool,runId);
   await pool.query("INSERT INTO ai_events(id,run_id,level,stage,message) VALUES($1,$2,'info','brain',$3)",[randomUUID(),runId,"Requirement accepted by ForgeOS."]);
   await pool.query("INSERT INTO ai_events(id,run_id,level,stage,message) VALUES($1,$2,'info','build',$3)",[randomUUID(),runId,"Source generated using "+generation.mode+"."]);
@@ -336,6 +335,7 @@ async function advanceRunSteps(pool,runId,{activeStage,status="running",complete
 }
 
 export async function buildAndPersist(pool,{runId,projectSlug,prompt,execute}) {
+  await transitionRun(pool,runId,"building",{eventStage:"build",message:"Run entered real source build execution."});
   await advanceRunSteps(pool,runId,{activeStage:"build",status:"running",completedStages:["brain","plan"]});
   const generation=await aiGenerate(prompt);
   const result=await execute(runId,generation.artifacts);
