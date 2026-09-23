@@ -27,6 +27,17 @@ function deterministicArtifacts(prompt) {
 export class LocalTemplateAIProvider extends AIProvider {
   constructor(){super({id:"local-template"});}
   async health(){return {ok:true,provider:this.id,capability:"ai",realExecution:false,deterministicFallback:true};}
+  async repair({prompt,files,failure}){
+    const c=config();
+    const response=await fetch(c.baseUrl+"/chat/completions",{method:"POST",headers:{"content-type":"application/json",authorization:"Bearer "+c.apiKey},body:JSON.stringify({model:c.model,temperature:.1,max_tokens:12000,messages:[
+      {role:"system",content:"You are the ForgeOS bounded repair engine. Return JSON only. Repair the supplied Vite React application so npm run build succeeds. Preserve the requirement and useful behavior. Return the complete corrected file set. Keep build exactly vite build and do not add lifecycle scripts or credentials."},
+      {role:"user",content:"Requirement:\n"+String(prompt).slice(0,4000)+"\n\nFailure:\n"+JSON.stringify(failure).slice(0,12000)+"\n\nCurrent source:\n"+files.map((f)=>"--- "+f.path+" ---\n"+f.content).join("\n").slice(0,60000)}],response_format:{type:"json_object"}})});
+    const body=await response.json().catch(()=>({}));
+    if(!response.ok)throw new Error(body?.error?.message||"ai_repair_failed");
+    const parsed=JSON.parse(body?.choices?.[0]?.message?.content||"{}");
+    return {artifacts:parsed.artifacts,mode:"ai-repair",provider:this.id,model:c.model,usage:body?.usage||{}};
+  }
+
   async generate(prompt){return {artifacts:deterministicArtifacts(prompt),mode:"template",provider:this.id,model:"deterministic-template-v5",usage:{}};}
 }
 
