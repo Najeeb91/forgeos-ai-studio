@@ -66,7 +66,7 @@ function NewProject() {
           <Panel title="Product idea" description="Natural language. Constraints welcome.">
             <form
               className="space-y-4"
-              onSubmit={(e) => {
+              onSubmit={async (e) => {
                 e.preventDefault();
                 if (idea.trim().length < 20) {
                   toast.error("Describe the idea in a little more detail first.");
