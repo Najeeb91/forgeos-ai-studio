@@ -248,10 +248,10 @@ const server = http.createServer(async (req, res) => {
       await pool.query("UPDATE deployments SET status=$1,url=$2 WHERE id=$3",[normalized,observed.url||row.url||"",row.id]);
       await pool.query("INSERT INTO deployment_observations(id,deployment_id,status,url,provider_job_id,simulated,detail) VALUES($1,$2,$3,$4,$5,false,$6::jsonb)",[randomUUID(),row.id,normalized,observed.url||row.url||"",observed.deploymentId||row.provider_job_id||null,JSON.stringify(observed)]);
       if (normalized === "ready") {
-        await transitionRun(pool,row.run_id,"deployed",{eventStage:"deploy",message:"Deployment provider reports the deployment is ready."}).catch(()=>{});
+        await transitionRun(pool,row.run_id,"deployed",{eventStage:"deploy",message:"Deployment provider reports the deployment is ready."});
         await pool.query("UPDATE ai_run_steps SET status='done' WHERE run_id=$1 AND stage='deploy'",[row.run_id]);
       } else if (normalized === "failed") {
-        await transitionRun(pool,row.run_id,"failed",{eventStage:"deploy",message:"Deployment provider reports deployment failure.",level:"error"}).catch(()=>{});
+        await transitionRun(pool,row.run_id,"failed",{eventStage:"deploy",message:"Deployment provider reports deployment failure.",level:"error"});
         await pool.query("UPDATE ai_run_steps SET status='failed' WHERE run_id=$1 AND stage='deploy' AND status NOT IN ('done','rejected')",[row.run_id]);
       }
       return json(res, 200, { state: normalized, simulated: false, deployment: { id: row.id, provider: row.adapter, providerStatus: observed.state, deploymentId: observed.deploymentId, url: observed.url||row.url||null, environment: observed.environment||null } });
