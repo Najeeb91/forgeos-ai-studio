@@ -71,7 +71,7 @@ export class LocalProcessBuildProvider {
     const root = await mkdtemp(join(tmpdir(), "forgeos-job-"));
     try {
       await writeWorkspace(files, root);
-      const install = await exec("npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund"], root);
+      const install = await exec("npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund"], root, { NODE_ENV: "development" });
       if (!install.ok) return { jobId, runId, state:"failed", phase:"install", simulated:false, provider:this.id, install };
       const built = await exec("npm", ["run", "build"], root);
       const artifact = await stat(join(root, "dist")).then(() => ({type:"directory",path:"dist"})).catch(() => null);
