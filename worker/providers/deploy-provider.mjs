@@ -1,4 +1,5 @@
 import { deployVercel } from "../deployment-core.mjs";
+import { createNetlifyDeployProvider } from "./netlify-deploy-provider.mjs";
 
 export class VercelDeployProvider {
   constructor() {
@@ -25,8 +26,9 @@ export function createDeployProviders() {
   return [new VercelDeployProvider()];
 }
 
-export function createDeployProvider() {
+export function createDeployProvider(secretsProvider=null) {
   const provider = process.env.FORGEOS_DEPLOY_PROVIDER || "vercel";
   if (provider === "vercel") return new VercelDeployProvider();
+  if (provider === "netlify") return createNetlifyDeployProvider(secretsProvider);
   throw new Error("unsupported_deploy_provider:" + provider);
 }
