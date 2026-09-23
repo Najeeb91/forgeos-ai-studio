@@ -26,5 +26,6 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: package.json
       - run: npm install --ignore-scripts --no-audit --no-fund
       - run: npm run build

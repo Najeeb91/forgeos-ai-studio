@@ -25,6 +25,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: package.json
       - name: Validate generated source
         run: |
           test -f package.json
