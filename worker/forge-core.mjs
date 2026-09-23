@@ -35,10 +35,25 @@ function validateArtifacts(artifacts) {
 }
 
 async function aiGenerate(prompt) {
-  const selected = await selectProvider(aiProviders, preferredAIProvider);
-  const generated = await selected.provider.generate(prompt);
-  return {...generated, artifacts: validateArtifacts(generated.artifacts),
-    providerSelection:{selected:selected.provider.id, preferred:preferredAIProvider, failover:selected.provider.id!==preferredAIProvider}};
+  const ordered=[];
+  const preferred=aiProviders.find((p)=>p.id===preferredAIProvider);
+  if(preferred) ordered.push(preferred);
+  for(const provider of aiProviders) if(!ordered.includes(provider)) ordered.push(provider);
+  const attempts=[];
+  for(const provider of ordered){
+    let health;
+    try{health=await provider.health();}catch(error){health={ok:false,error:error instanceof Error?error.message:String(error)};}
+    if(!health?.ok){attempts.push({provider:provider.id,status:"unavailable",error:health?.error||"provider_unhealthy"});continue;}
+    try{
+      const generated=await provider.generate(prompt);
+      return {...generated,artifacts:validateArtifacts(generated.artifacts),
+        providerSelection:{selected:provider.id,preferred:preferredAIProvider,failover:provider.id!==preferredAIProvider},
+        providerAttempts:[...attempts,{provider:provider.id,status:"succeeded"}]};
+    }catch(error){
+      attempts.push({provider:provider.id,status:"failed",error:error instanceof Error?error.message:String(error)});
+    }
+  }
+  throw new Error("all_ai_providers_failed:"+attempts.map((a)=>a.provider+":"+a.error).join(","));
 }
 
 export async function listProjects(pool) {
