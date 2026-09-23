@@ -155,6 +155,49 @@ const server = http.createServer(async (req, res) => {
       return json(res,200,{state:"deploying",simulated:false,deployment});
     }
 
+    if (req.method === "GET" && req.url?.startsWith("/worker/deploy/status")) {
+      if (!authorized(req)) return json(res, 401, { error: "worker_auth_required" });
+      if (!pool) return json(res, 503, { error: "worker_database_not_configured" });
+      const url = new URL(req.url, "http://forgeos-worker");
+      const deploymentId = url.searchParams.get("deploymentId");
+      const runId = url.searchParams.get("runId");
+      let row;
+      if (deploymentId) {
+        row = (await pool.query("SELECT d.id,d.project_id,d.status,d.url,d.adapter,d.created_at,do.provider_job_id FROM deployments d LEFT JOIN LATERAL (SELECT provider_job_id FROM deployment_observations WHERE deployment_id=d.id ORDER BY observed_at DESC LIMIT 1) do ON true WHERE d.id=$1 LIMIT 1",[deploymentId])).rows[0];
+      } else if (runId) {
+        row = (await pool.query("SELECT d.id,d.project_id,d.status,d.url,d.adapter,d.created_at,do.provider_job_id FROM ai_runs ar JOIN deployments d ON d.project_id=ar.project_id LEFT JOIN LATERAL (SELECT provider_job_id FROM deployment_observations WHERE deployment_id=d.id ORDER BY observed_at DESC LIMIT 1) do ON true WHERE ar.id=$1 ORDER BY d.created_at DESC LIMIT 1",[runId])).rows[0];
+      } else {
+        return json(res, 400, { error: "deploymentId_or_runId_required" });
+      }
+      if (!row) return json(res, 404, { error: "deployment_not_found" });
+      const provider = deployProviders.find((item) => item.id === row.adapter);
+      if (!provider || typeof provider.status !== "function") return json(res, 409, { error: "deployment_status_provider_unavailable", provider: row.adapter });
+      const secretName = provider.id === "netlify" ? "NETLIFY_AUTH_TOKEN" : "VERCEL_TOKEN";
+      const secret = await secretsProvider.get(secretName);
+      const observed = await provider.status({ token: secret?.value || "", deploymentId: row.provider_job_id });
+      const statusMap = {
+        READY: "ready",
+        COMPLETED: "ready",
+        BUILDING: "building",
+        QUEUED: "queued",
+        INITIALIZING: "building",
+        DEPLOYING: "deploying",
+        ERROR: "failed",
+        CANCELED: "cancelled",
+        CANCELLED: "cancelled",
+        FAILED: "failed",
+      };
+      const normalized = statusMap[String(observed.state || "").toUpperCase()] || String(observed.state || row.status || "unknown").toLowerCase();
+      await pool.query("UPDATE deployments SET status=$1,url=$2 WHERE id=$3",[normalized,observed.url||row.url||"",row.id]);
+      await pool.query("INSERT INTO deployment_observations(id,deployment_id,status,url,provider_job_id,simulated,detail) VALUES($1,$2,$3,$4,$5,false,$6::jsonb)",[randomUUID(),row.id,normalized,observed.url||row.url||"",observed.deploymentId||row.provider_job_id||null,JSON.stringify(observed)]);
+      if (normalized === "ready") {
+        await pool.query("UPDATE ai_runs SET status='deployed' WHERE project_id=$1 AND status='deploying'",[row.project_id]);
+      } else if (normalized === "failed") {
+        await pool.query("UPDATE ai_runs SET status='failed' WHERE project_id=$1 AND status='deploying'",[row.project_id]);
+      }
+      return json(res, 200, { state: normalized, simulated: false, deployment: { id: row.id, provider: row.adapter, providerStatus: observed.state, deploymentId: observed.deploymentId, url: observed.url||row.url||null, environment: observed.environment||null } });
+    }
+
     if (req.method === "POST" && req.url === "/worker/source/push") {
       if (!authorized(req)) return json(res, 401, { error: "worker_auth_required" });
       if (!pool) return json(res, 503, { error: "worker_database_not_configured" });
