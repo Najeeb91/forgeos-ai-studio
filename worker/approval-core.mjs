@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { transitionRun } from "./run-state.mjs";
 
 async function ensureProject(pool, projectSlug, prompt) {
   const id = randomUUID();
@@ -88,10 +89,7 @@ export async function approveBuild(pool, { runId, approvalId, decision, actorId 
     [normalized === "approved" ? "done" : "rejected", approval.step_id]
   );
   const nextRunState = approval.action_type === "deploy_production" ? (normalized === "approved" ? "review" : "failed") : (normalized === "approved" ? "executing" : "failed");
-  await pool.query(
-    "UPDATE ai_runs SET status=$1,updated_at=now() WHERE id=$2",
-    [nextRunState, runId]
-  );
+  await transitionRun(pool,runId,nextRunState,{eventStage:"approval",message:"Human approval decision: "+normalized});
   if (approval.action_type === "deploy_production" && normalized === "approved") {
     await pool.query("UPDATE ai_run_steps SET status='running' WHERE run_id=$1 AND stage='deploy' AND status NOT IN ('done','rejected')",[runId]);
   } else if (normalized === "approved") {
