@@ -10,6 +10,7 @@ export const ProviderCapability = Object.freeze({
   DEPLOY: "deploy",
   SECRETS: "secrets",
   SOURCE: "source",
+  AUTH: "auth",
 });
 
 export class ForgeOSProvider {
@@ -21,6 +22,11 @@ export class ForgeOSProvider {
   async health() {
     return { ok: true, provider: this.id, capability: this.capability };
   }
+}
+
+export class AuthProvider extends ForgeOSProvider {
+  constructor(options) { super({ ...options, capability: ProviderCapability.AUTH }); }
+  async authenticate() { throw new Error("auth_provider_not_implemented"); }
 }
 
 export class BuildProvider extends ForgeOSProvider {
