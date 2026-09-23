@@ -341,6 +341,36 @@ async function persistRepair(pool,{runId,prompt,files,failure,result,generation,
   return {projectId,snapshotId,testRunId};
 }
 
+export async function autoRepairAndBuild({pool=null,runId,projectSlug="forgeos",prompt,files,failure,execute,maxAttempts=2}) {
+  let currentFiles=Array.isArray(files)?files:[];
+  let currentFailure=String(failure||"real build failed");
+  const attempts=Math.max(0,Math.min(2,Number(maxAttempts)||2));
+  const history=[];
+  for(let attempt=1;attempt<=attempts;attempt++){
+    if(pool){
+      const state=(await pool.query("SELECT status FROM ai_runs WHERE id=$1",[runId])).rows[0]?.status;
+      if(state==="cancelled") return {state:"cancelled",simulated:false,repairAttempts:history};
+      await pool.query("INSERT INTO ai_events(id,run_id,level,stage,message) VALUES($1,$2,'info','repair',$3)",[randomUUID(),runId,"Automatic repair attempt "+attempt+" of "+attempts+" started."]);
+    }
+    try{
+      const result=await repairAndBuild({pool,runId,projectSlug,prompt,files:currentFiles,failure:currentFailure,execute});
+      history.push({attempt,state:result.state,provider:result.provider||null,error:result.state==="passed"?null:(result.error||"repair_failed")});
+      if(result.state==="passed") return {...result,repairAttempts:history};
+      currentFiles=result.sourceFiles?.length?result.sourceFiles:currentFiles;
+      currentFailure=String(result.error||"repair build failed");
+    }catch(error){
+      currentFailure=error instanceof Error?error.message:String(error);
+      history.push({attempt,state:"failed",provider:null,error:currentFailure});
+      if(pool) await pool.query("INSERT INTO ai_events(id,run_id,level,stage,message) VALUES($1,$2,'warn','repair',$3)",[randomUUID(),runId,"Automatic repair attempt "+attempt+" failed: "+currentFailure.slice(0,1500)]);
+    }
+  }
+  if(pool){
+    await pool.query("UPDATE ai_runs SET status='failed',completed_at=now() WHERE id=$1 AND status NOT IN ('cancelled','deployed')",[runId]);
+    await pool.query("INSERT INTO ai_events(id,run_id,level,stage,message) VALUES($1,$2,'error','repair',$3)",[randomUUID(),runId,"Automatic repair exhausted after "+attempts+" bounded attempt(s)."]);
+  }
+  return {state:"failed",simulated:false,repairAttempts:history,error:currentFailure};
+}
+
 export async function repairAndBuild({pool=null,runId,projectSlug="forgeos",prompt,files,failure,execute}) {
   const selected = await selectProvider(aiProviders, preferredAIProvider);
   if (typeof selected.provider.repair !== "function") throw new Error("selected_ai_provider_cannot_repair");
