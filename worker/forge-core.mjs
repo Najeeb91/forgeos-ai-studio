@@ -408,7 +408,7 @@ export async function repairAndBuild({pool=null,runId,projectSlug="forgeos",prom
       continue;
     }
     const attemptId=randomUUID();
-    if(pool) await pool.query("INSERT INTO provider_attempts(id,run_id,kind,provider,capability,status,priority,simulated) VALUES($1,$2,$3,'repair',$4,'ai','running',$5,false)",[attemptId,repairProjectId,runId,provider.id,candidate.health?.priority||0]).catch(()=>{});
+    if(pool) await pool.query("INSERT INTO provider_attempts(id,project_id,run_id,kind,provider,capability,status,priority,simulated) VALUES($1,$2,$3,'repair',$4,'ai','running',$5,false)",[attemptId,repairProjectId,runId,provider.id,candidate.health?.priority||0]).catch(()=>{});
     try {
       generated=await provider.repair({prompt,files,failure});
       selectedProvider=provider;
