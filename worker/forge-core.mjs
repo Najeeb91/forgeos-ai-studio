@@ -34,7 +34,7 @@ function validateArtifacts(artifacts) {
   return artifacts;
 }
 
-async function aiGenerate(prompt) {
+async async function aiGenerate(prompt) {
   const selected = await selectProvider(aiProviders, preferredAIProvider);
   const generated = await selected.provider.generate(prompt);
   return {...generated, artifacts: validateArtifacts(generated.artifacts),
