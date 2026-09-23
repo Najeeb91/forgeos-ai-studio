@@ -7,7 +7,7 @@ import { createDatabaseProvider } from "./providers/database-provider.mjs";
 import { createSourceProvider } from "./providers/source-provider.mjs";
 import { createSecretsProvider } from "./providers/secrets-provider.mjs";
 import { createStorageProvider } from "./providers/storage-provider.mjs";
-import { buildAndPersist, repairAndBuild, latestSource, capabilities, readProject } from "./forge-core.mjs";
+import { buildAndPersist, repairAndBuild, latestSource, capabilities, readProject, createProject } from "./forge-core.mjs";
 import { runMigrations } from "./migrate.mjs";
 import { prepareBuild, approveBuild, assertApproved } from "./approval-core.mjs";
 
@@ -258,6 +258,15 @@ const server = http.createServer(async (req, res) => {
         execute,
       });
       return json(res, result.state === "passed" ? 200 : 422, result);
+    }
+
+    if (req.method === "POST" && req.url === "/worker/project") {
+      if (!authorized(req)) return json(res, 401, { error: "worker_auth_required" });
+      if (!pool) return json(res, 503, { error: "worker_database_not_configured" });
+      const payload = await body(req);
+      if (!payload.slug || !payload.name || !payload.prompt) return json(res, 400, { error: "slug_name_prompt_required" });
+      const project = await createProject(pool, { slug: payload.slug, name: payload.name, prompt: payload.prompt });
+      return json(res, 201, { project: project?.project || null, simulated: false });
     }
 
     if (req.method === "GET" && req.url?.startsWith("/worker/project/")) {
