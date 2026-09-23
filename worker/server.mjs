@@ -319,6 +319,23 @@ const server = http.createServer(async (req, res) => {
       return json(res, result.state === "passed" ? 200 : 422, result);
     }
 
+    if (req.method === "GET" && req.url?.startsWith("/worker/run/")) {
+      if (!authorized(req)) return json(res, 401, { error: "worker_auth_required" });
+      if (!pool) return json(res, 503, { error: "worker_database_not_configured" });
+      const runId = decodeURIComponent(req.url.slice("/worker/run/".length));
+      if (!runId) return json(res, 400, { error: "runId_required" });
+      const run = (await pool.query("SELECT id,project_id,prompt,provider,model,status,started_at,created_at,updated_at,completed_at FROM ai_runs WHERE id=$1 LIMIT 1",[runId])).rows[0];
+      if (!run) return json(res, 404, { error: "run_not_found" });
+      const [steps,events,approvals,tests,deployments] = await Promise.all([
+        pool.query("SELECT id,title,detail,stage,risk,status,order_idx FROM ai_run_steps WHERE run_id=$1 ORDER BY order_idx,id",[runId]),
+        pool.query("SELECT id,level,stage,message,created_at FROM ai_events WHERE run_id=$1 ORDER BY created_at,id",[runId]),
+        pool.query("SELECT id,step_id,action_type,target,reason,risk,status,created_at,decided_at FROM approval_requests WHERE run_id=$1 ORDER BY created_at,id",[runId]),
+        pool.query("SELECT id,status,provider,created_at,completed_at,error FROM test_runs WHERE run_id=$1 ORDER BY created_at,id",[runId]),
+        pool.query("SELECT id,env,status,url,adapter,created_at FROM deployments WHERE run_id=$1 ORDER BY created_at,id",[runId])
+      ]);
+      return json(res,200,{run,steps:steps.rows,events:events.rows,approvals:approvals.rows,tests:tests.rows,deployments:deployments.rows,simulated:false});
+    }
+
     if (req.method === "GET" && req.url === "/worker/projects") {
       if (!authorized(req)) return json(res, 401, { error: "worker_auth_required" });
       if (!pool) return json(res, 503, { error: "worker_database_not_configured" });
