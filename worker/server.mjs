@@ -350,7 +350,10 @@ async function recoverInterruptedRuns() {
   if (!pool) return;
   await pool.query("UPDATE ai_runs SET status='recovery_required',completed_at=now() WHERE status IN ('testing','executing','building','repairing','deploying')");
   await pool.query("UPDATE provider_attempts SET status='interrupted',completed_at=now(),error=coalesce(error,'worker_restart_interrupted_attempt') WHERE status='running'");
-  await pool.query("INSERT INTO ai_events(id,run_id,level,stage,message) SELECT gen_random_uuid(),id,'warn','recovery','Worker restart detected; execution requires explicit recovery.' FROM ai_runs WHERE status='recovery_required' AND updated_at > now() - interval '30 seconds'").catch(()=>{});
+  const interrupted=(await pool.query("SELECT id FROM ai_runs WHERE status='recovery_required' AND updated_at > now() - interval '30 seconds'")).rows;
+  for (const run of interrupted) {
+    await pool.query("INSERT INTO ai_events(id,run_id,level,stage,message) VALUES($1,$2,'warn','recovery','Worker restart detected; execution requires explicit recovery.')",[randomUUID(),run.id]).catch(()=>{});
+  }
 }
 
 async function initializeDatabase() {
