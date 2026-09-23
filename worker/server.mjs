@@ -6,7 +6,6 @@ import { Pool } from "pg";
 import { buildAndPersist, repairAndBuild, latestSource, capabilities, readProject } from "./forge-core.mjs";
 import { runMigrations } from "./migrate.mjs";
 import { prepareBuild, approveBuild, assertApproved } from "./approval-core.mjs";
-import { deployVercel } from "./deployment-core.mjs";
 
 const PORT = Number(process.env.PORT || 8080);
 const WORKER_TOKEN = process.env.FORGEOS_WORKER_TOKEN || "";
@@ -46,6 +45,10 @@ function authorized(req) {
 
 const buildProvider = createBuildProvider();
 const deployProvider = createDeployProvider();
+
+async function execute(runId, files) {
+  return buildProvider.build(runId, files);
+}
 
 const server = http.createServer(async (req, res) => {
   try {
@@ -121,7 +124,7 @@ const server = http.createServer(async (req, res) => {
       const snapshot=(await pool.query("SELECT id FROM source_snapshots WHERE project_id=$1 ORDER BY created_at DESC LIMIT 1",[run.project_id])).rows[0]?.id || null;
       await pool.query("INSERT INTO deployments(id,project_id,env,status,commit_sha,url,adapter,simulated) VALUES($1,$2,$3,$4,$5,$6,$7,false)",[deploymentId,run.project_id,environment,deployment.state||"building",snapshot||"",deployment.url||"",deployProvider.id]);
       await pool.query("INSERT INTO deployment_observations(id,deployment_id,status,url,provider_job_id,simulated,detail) VALUES($1,$2,$3,$4,$5,false,$6::jsonb)",[randomUUID(),deploymentId,deployment.state||"building",deployment.url||"",deployment.deploymentId||null,JSON.stringify(deployment)]);
-      await pool.query("INSERT INTO audit_events(id,project_id,actor,actor_name,action,target,risk,approved,diff_summary,stage) VALUES($1,$2,'system','ForgeOS','deploy',$3,'critical',$4,$5,'deploying')",[randomUUID(),run.project_id,environment,true,"Real deployment provider invoked: "+deployProvider.id+".]);
+      await pool.query("INSERT INTO audit_events(id,project_id,actor,actor_name,action,target,risk,approved,diff_summary,stage) VALUES($1,$2,'system','ForgeOS','deploy',$3,'critical',$4,$5,'deploying')",[randomUUID(),run.project_id,environment,true,"Real deployment provider invoked: "+deployProvider.id+"."]);
       await pool.query("UPDATE ai_runs SET status='deploying',completed_at=now() WHERE id=$1",[runId]);
       return json(res,200,{state:"deploying",simulated:false,deployment});
     }
