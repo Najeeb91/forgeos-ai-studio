@@ -10,6 +10,7 @@ export class VercelDeployProvider {
     return {
       ok: Boolean(process.env.VERCEL_TOKEN),
       provider: this.id,
+      capability: this.capability,
       configured: Boolean(process.env.VERCEL_TOKEN),
       realExecution: Boolean(process.env.VERCEL_TOKEN),
     };
