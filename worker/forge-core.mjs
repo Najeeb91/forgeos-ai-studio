@@ -285,7 +285,7 @@ async function recordBuild(pool,{runId,projectSlug,prompt,artifacts,result,gener
   await pool.query("INSERT INTO ai_events(id,run_id,level,stage,message) VALUES($1,$2,'info','brain',$3)",[randomUUID(),runId,"Requirement accepted by ForgeOS."]);
   await pool.query("INSERT INTO ai_events(id,run_id,level,stage,message) VALUES($1,$2,'info','build',$3)",[randomUUID(),runId,"Source generated using "+generation.mode+"."]);
   const snapshotId=randomUUID();
-  await pool.query("INSERT INTO source_snapshots(id,project_id,message) VALUES($1,$2,$3)",[snapshotId,projectId,"Generated source ("+generation.mode+") for run "+runId]);
+  await pool.query("INSERT INTO source_snapshots(id,project_id,run_id,message) VALUES($1,$2,$3,$4)",[snapshotId,projectId,runId,"Generated source ("+generation.mode+") for run "+runId]);
   for(const file of artifacts) await pool.query("INSERT INTO source_files(id,snapshot_id,path,kind,language,loc,status,content) VALUES($1,$2,$3,'file',$4,$5,'generated',$6)",[randomUUID(),snapshotId,file.path,file.language||"text",String(file.content||"").split("\n").length,file.content]);
   const passed=result.state==="passed"&&result.simulated===false;
   const testRunId=randomUUID();
@@ -318,7 +318,7 @@ async function persistRepair(pool,{runId,prompt,files,failure,result,generation,
   if (!project.rows[0]) return null;
   const projectId=project.rows[0].id;
   const snapshotId=randomUUID();
-  await pool.query("insert into source_snapshots(id,project_id,message) values($1,$2,$3)",[snapshotId,projectId,"AI repair source for run "+runId]);
+  await pool.query("insert into source_snapshots(id,project_id,run_id,message) values($1,$2,$3,$4)",[snapshotId,projectId,runId,"AI repair source for run "+runId]);
   for(const file of generation.artifacts){
     await pool.query("insert into source_files(id,snapshot_id,path,kind,language,loc,status,content) values($1,$2,$3,'file',$4,$5,'generated',$6)",[randomUUID(),snapshotId,file.path,file.language||"text",String(file.content||"").split("\n").length,file.content]);
   }
