@@ -21,7 +21,7 @@ export class NetlifyDeployProvider extends ForgeOSProvider {
       if(!created.ok && created.status!==422)throw new Error(body?.message||body?.error||"netlify_site_create_failed");
       siteId=body?.id||"";
       if(!siteId){
-        const list=await fetch(API+"/sites?filter=name&value="+encodeURIComponent(name),{headers:{Authorization:"Bearer "+token}});
+        const list=await fetch(API+"/sites?name="+encodeURIComponent(name),{headers:{Authorization:"Bearer "+token}});
         const sites=await list.json().catch(()=>[]);
         siteId=Array.isArray(sites)?sites.find(s=>s.name===name)?.id||"":""; 
       }
