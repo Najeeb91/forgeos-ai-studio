@@ -221,6 +221,25 @@ async function ensureProject(pool, slug, prompt) {
   return projectId;
 }
 
+export async function createProject(pool, { slug, name, prompt }) {
+  if (!pool) throw new Error("worker_database_not_configured");
+  const safeSlug = String(slug || "").trim().toLowerCase();
+  if (!/^[a-z0-9][a-z0-9-]{0,62}$/.test(safeSlug)) throw new Error("unsafe_project_slug");
+  const projectName = String(name || "").trim().slice(0, 255) || safeSlug;
+  const requirement = String(prompt || "").trim().slice(0, 4000);
+  if (requirement.length < 20) throw new Error("project_prompt_too_short");
+  const id = randomUUID();
+  const result = await pool.query(
+    "INSERT INTO projects(id,slug,name,tagline,description,status,health,owner,stack,benchmark) VALUES($1,$2,$3,$4,$5,'drafting','healthy','forgeos',$6::jsonb,false) ON CONFLICT(slug) DO UPDATE SET name=EXCLUDED.name,description=EXCLUDED.description,updated_at=now() RETURNING id",
+    [id, safeSlug, projectName, "New ForgeOS project", "Project created from a natural-language requirement.", JSON.stringify(["React", "TypeScript", "Vite"])]
+  );
+  const projectId = result.rows[0].id;
+  await seedRecoveredContext(pool, projectId);
+  await pool.query("INSERT INTO project_context_entries(id,project_id,kind,title,content,source,occurred_at) VALUES($1,$2,'requirement',$3,$4,'user',now())", [randomUUID(), projectId, "Initial project requirement", requirement]);
+  await pool.query("INSERT INTO project_brain_versions(id,project_id,version,vision,requirements,decisions,architecture,\"schema\",integrations) VALUES($1,$2,1,$3,$4::jsonb,'[]'::jsonb,'[]'::jsonb,'[]'::jsonb,'[]'::jsonb) ON CONFLICT DO NOTHING", [randomUUID(), projectId, requirement.slice(0, 500), JSON.stringify([{id: randomUUID(), title: "Initial requirement", detail: requirement, kind: "functional", priority: "must", status: "draft"}])]);
+  return readProject(pool, safeSlug);
+}
+
 async function recordPlan(pool,runId) {
   const existing=await pool.query("SELECT count(*)::int AS count FROM ai_run_steps WHERE run_id=$1",[runId]);
   if(Number(existing.rows[0]?.count||0)>0) return;
