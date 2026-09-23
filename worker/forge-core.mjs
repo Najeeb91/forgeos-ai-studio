@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 
 import { createAIProviders } from "./providers/ai-provider.mjs";
 import { selectProvider } from "./providers/registry.mjs";
+import { transitionRun } from "./run-state.mjs";
 
 const aiProviders = createAIProviders();
 const preferredAIProvider = process.env.FORGEOS_AI_PROVIDER || "openai-compatible";
@@ -312,7 +313,7 @@ async function recordBuild(pool,{runId,projectSlug,prompt,artifacts,result,gener
   await pool.query("INSERT INTO test_results(id,test_run_id,name,suite,status,duration_ms,detail) VALUES($1,$2,'real build','execution',$3,$4,$5)",[randomUUID(),testRunId,passed?"passed":"failed",Number(result?.build?.durationMs||result?.install?.durationMs||0),JSON.stringify(result)]);
   await pool.query("INSERT INTO ai_events(id,run_id,level,stage,message) VALUES($1,$2,$3,'test',$4)",[randomUUID(),runId,passed?"info":"error",passed?"Real build verification passed.":"Real build verification failed during "+result.phase+"."]);
   await pool.query("INSERT INTO audit_events(id,project_id,actor,actor_name,action,target,risk,approved,diff_summary,stage) VALUES($1,$2,'system','ForgeOS',$3,$4,'low',NULL,$5,'test')",[randomUUID(),projectId,passed?"real_build_passed":"real_build_failed",runId,result.error||result.phase]);
-  await pool.query("UPDATE ai_runs SET status=$2,completed_at=now() WHERE id=$1",[runId,passed?"review":"repairing"]);
+  await transitionRun(pool,runId,passed?"review":"repairing",{eventStage:"test",message:passed?"Real build verification passed; run is ready for review.":"Real build verification failed; run entered bounded repair."});
   await pool.query("UPDATE provider_attempts SET status=$1,completed_at=now(),job_id=$2,error=$3,observations=$4::jsonb WHERE id=$5",[
     passed ? "succeeded" : "failed",
     result.jobId || null,
@@ -360,7 +361,7 @@ async function persistRepair(pool,{runId,prompt,files,failure,result,generation,
   await pool.query("insert into test_results(id,test_run_id,name,suite,status,duration_ms,detail) values($1,$2,'AI repair build','repair',$3,$4,$5)",[randomUUID(),testRunId,passed?"passed":"failed",Number(result?.build?.durationMs||result?.install?.durationMs||0),JSON.stringify({failure,phase:result.phase,state:result.state})]);
   await pool.query("insert into ai_events(id,run_id,level,stage,message) values($1,$2,$3,'repair',$4)",[randomUUID(),runId,passed?"info":"error",passed?"AI repair produced a build-verified source snapshot.":"AI repair attempt failed during real execution."]);
   await pool.query("insert into audit_events(id,project_id,actor,actor_name,action,target,risk,approved,diff_summary,stage) values($1,$2,'system','ForgeOS',$3,$4,'medium',NULL,$5,'repair')",[randomUUID(),projectId,passed?"repair_passed":"repair_failed",runId,String(failure).slice(0,2000)]);
-  await pool.query("update ai_runs set status=$2,completed_at=case when $2='review' then now() else null end where id=$1",[runId,passed?"review":"repairing"]);
+  await transitionRun(pool,runId,passed?"review":"repairing",{eventStage:"repair",message:passed?"Repair build verified; run is ready for review.":"Repair attempt failed; run remains in bounded repair."});
   return {projectId,snapshotId,testRunId};
 }
 
@@ -388,7 +389,7 @@ export async function autoRepairAndBuild({pool=null,runId,projectSlug="forgeos",
     }
   }
   if(pool){
-    await pool.query("UPDATE ai_runs SET status='failed',completed_at=now() WHERE id=$1 AND status NOT IN ('cancelled','deployed')",[runId]);
+    await transitionRun(pool,runId,"failed",{eventStage:"repair",message:"Automatic repair attempts exhausted.",level:"error"}).catch(()=>{});
     await pool.query("INSERT INTO ai_events(id,run_id,level,stage,message) VALUES($1,$2,'error','repair',$3)",[randomUUID(),runId,"Automatic repair exhausted after "+attempts+" bounded attempt(s)."]);
   }
   return {state:"failed",simulated:false,repairAttempts:history,error:currentFailure};
