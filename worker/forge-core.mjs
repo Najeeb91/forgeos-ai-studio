@@ -41,6 +41,12 @@ async function aiGenerate(prompt) {
     providerSelection:{selected:selected.provider.id, preferred:preferredAIProvider, failover:selected.provider.id!==preferredAIProvider}};
 }
 
+export async function listProjects(pool) {
+  if (!pool) throw new Error("worker_database_not_configured");
+  const rows = (await pool.query("select slug from projects order by updated_at desc, created_at desc")).rows;
+  return (await Promise.all(rows.map((row) => readProject(pool, row.slug)))).filter(Boolean);
+}
+
 export async function readProject(pool, slug) {
   if (!pool) throw new Error("worker_database_not_configured");
   const projectResult = await pool.query("select * from projects where slug=$1 limit 1", [slug]);
