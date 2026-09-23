@@ -1,7 +1,7 @@
 import http from "node:http";
 import { createBuildProviders } from "./providers/build-provider.mjs";
 import { createDeployProviders } from "./providers/deploy-provider.mjs";
-import { selectProvider, healthyProviders } from "./providers/registry.mjs";
+import { selectProvider } from "./providers/registry.mjs";
 import { randomUUID } from "node:crypto";
 import { createDatabaseProvider } from "./providers/database-provider.mjs";
 import { createSourceProvider } from "./providers/source-provider.mjs";
@@ -20,9 +20,9 @@ const MAX_DURATION_MS = 120000;
 const MAX_OUTPUT_BYTES = 2 * 1024 * 1024;
 
 const databaseProvider = createDatabaseProvider();
+const secretsProvider = createSecretsProvider();
 const sourceProvider = createSourceProvider(secretsProvider);
 const storageProvider = createStorageProvider(databaseProvider);
-const secretsProvider = createSecretsProvider();
 const pool = databaseProvider.pool;
 
 function json(res, status, body) {
