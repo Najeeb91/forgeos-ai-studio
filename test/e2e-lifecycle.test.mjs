@@ -51,6 +51,7 @@ try {
     prompt,
     execute: (id, files) => buildProvider.build(id, files),
   });
+  if (result.state !== "passed") console.error("E2E_BUILD_RESULT", JSON.stringify(result, null, 2));
   assertEqual(result.state, "passed", "generated source must pass a real Vite build");
   assertEqual(result.simulated, false, "build evidence must be real");
   assert.ok(result.snapshotId, "run-bound source snapshot must exist");
