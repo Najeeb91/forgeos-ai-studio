@@ -52,7 +52,7 @@ function authorized(req) {
 }
 
 const buildProviders = createBuildProviders();
-const deployProviders = createDeployProviders();
+const deployProviders = createDeployProviders(secretsProvider);
 const preferredBuildProvider = process.env.FORGEOS_BUILD_PROVIDER || "local-process";
 const preferredDeployProvider = process.env.FORGEOS_DEPLOY_PROVIDER || "vercel";
 
