@@ -22,3 +22,24 @@ export async function deployVercel({token,projectName,files,environment="product
     environment
   };
 }
+
+
+export async function getVercelDeployment({token,deploymentId}) {
+  if(!token) throw new Error("vercel_credentials_required");
+  if(!deploymentId) throw new Error("vercel_deployment_id_required");
+  const response=await fetch("https://api.vercel.com/v13/deployments/"+encodeURIComponent(deploymentId),{
+    headers:{Authorization:"Bearer "+token}
+  });
+  const body=await response.json().catch(()=>({}));
+  if(!response.ok) throw new Error(body?.error?.message||body?.error?.code||"vercel_deployment_status_failed");
+  return {
+    provider:"vercel",
+    simulated:false,
+    deploymentId:body?.id||deploymentId,
+    url:body?.url ? "https://"+String(body.url).replace(/^https?:\/\//,"") : null,
+    state:body?.readyState||body?.state||"UNKNOWN",
+    project:body?.name||null,
+    environment:body?.target==="production"?"production":"preview",
+    raw:body
+  };
+}
