@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { projects as seedProjects } from "./data";
-import { createForgeProject as createForgeProjectWorker, getProjectFromWorker } from "./worker-client";
+import { createForgeProject as createForgeProjectWorker, getProjectFromWorker, listProjectsFromWorker } from "./worker-client";
 import { listForgeProviders as listConfiguredProviders } from "./provider-routing";
 
 export const getForgeProject = createServerFn({ method: "GET" })
@@ -15,13 +15,15 @@ export const getForgeProject = createServerFn({ method: "GET" })
   });
 
 export const listForgeProjects = createServerFn({ method: "GET" }).handler(async () => {
-  const results = await Promise.all(seedProjects.map(async (seed) => {
-    try {
-      const remote = await getProjectFromWorker(seed.slug);
-      return remote?.project ? ({ ...seed, ...remote.project, brain: remote.project.brain ?? seed.brain } as typeof seed) : seed;
-    } catch { return seed; }
-  }));
-  return { projects: results, source: results.some((p, i) => p !== seedProjects[i]) ? "remote" as const : "seed" as const };
+  try {
+    const remote = await listProjectsFromWorker();
+    const bySlug = new Map(remote.map((project) => [project.slug, project]));
+    const mergedSeeds = seedProjects.map((seed) => ({ ...seed, ...(bySlug.get(seed.slug) ?? {}), brain: bySlug.get(seed.slug)?.brain ?? seed.brain }));
+    const remoteOnly = remote.filter((project) => !seedProjects.some((seed) => seed.slug === project.slug));
+    return { projects: [...mergedSeeds, ...remoteOnly], source: "remote" as const };
+  } catch {
+    return { projects: seedProjects, source: "seed" as const };
+  }
 });
 
 export const listForgeProviders = createServerFn({ method: "GET" }).handler(async () => ({
