@@ -50,6 +50,18 @@ async function execute(runId, files) {
   return buildProvider.build(runId, files);
 }
 
+async function providerHealth() {
+  const checks = [];
+  for (const provider of [buildProvider, deployProvider]) {
+    try {
+      checks.push(await provider.health());
+    } catch (error) {
+      checks.push({ ok:false, provider:provider.id, capability:provider.capability, error:error instanceof Error ? error.message : String(error) });
+    }
+  }
+  return checks;
+}
+
 const server = http.createServer(async (req, res) => {
   try {
     if (req.method === "GET" && req.url === "/health") {
@@ -65,7 +77,7 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === "GET" && req.url === "/worker/capabilities") {
       if (!authorized(req)) return json(res, 401, { error: "worker_auth_required" });
-      return json(res, 200, capabilities());
+      return json(res, 200, { ...capabilities(), runtimeProviders: await providerHealth() });
     }
 
     if (req.method === "POST" && req.url === "/worker/build") {
