@@ -114,7 +114,7 @@ function Builder() {
   }
 
   async function watchDeployment(runId:string) {
-    for(let attempt=0; attempt<10; attempt++){
+    for(let attempt=0; attempt<60; attempt++){
       await new Promise((resolve)=>setTimeout(resolve,3000));
       try {
         const status=await getForgeDeploymentStatus({data:{runId}});
