@@ -8,6 +8,15 @@ export class NetlifyDeployProvider extends ForgeOSProvider {
   constructor(secretsProvider=null){super({id:"netlify",capability:ProviderCapability.DEPLOY});this.secrets=secretsProvider;}
   async token(){const s=this.secrets?await this.secrets.get("NETLIFY_AUTH_TOKEN"):null;return s?.value||process.env.NETLIFY_AUTH_TOKEN||"";}
   async health(){const token=await this.token();if(!token)return {ok:false,provider:this.id,capability:this.capability,configured:false,realExecution:false,error:"netlify_auth_token_missing"};const r=await fetch(API+"/sites?per_page=1",{headers:{Authorization:"Bearer "+token}});return {ok:r.ok,provider:this.id,capability:this.capability,configured:true,realExecution:r.ok,error:r.ok?null:"netlify_api_unavailable"};}
+  async status({token,deploymentId}){
+    if(!token)throw new Error("netlify_credentials_required");
+    if(!deploymentId)throw new Error("netlify_deployment_id_required");
+    const r=await fetch(API+"/deploys/"+encodeURIComponent(deploymentId),{headers:{Authorization:"Bearer "+token}});
+    const body=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(body?.message||body?.error||"netlify_deployment_status_failed");
+    return {provider:this.id,simulated:false,deploymentId:body?.id||deploymentId,url:body?.ssl_url||body?.url||null,state:body?.state||"UNKNOWN",project:body?.site_name||null,environment:body?.production?"production":"preview",raw:body};
+  }
+
   async deploy({token,projectName,files,environment="production"}){
     if(!token)throw new Error("netlify_credentials_required");
     if(!Array.isArray(files)||!files.length)throw new Error("netlify_files_required");
