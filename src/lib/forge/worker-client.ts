@@ -59,3 +59,13 @@ export async function getDeploymentStatus(runId:string):Promise<any>{
   if(payload.simulated!==false)throw new Error("Deployment status was not reported as real");
   return payload;
 }
+
+export async function listProjectsFromWorker():Promise<any[]>{
+  const {url,token}=workerConfig();
+  const response=await fetch(url+"/worker/projects",{headers:{authorization:"Bearer "+token}});
+  const text=await response.text();
+  let payload:any; try{payload=JSON.parse(text)}catch{throw new Error("Project list worker returned invalid JSON (HTTP "+response.status+")");}
+  if(!response.ok)throw new Error(payload.error||"Project list failed with HTTP "+response.status);
+  if(payload.simulated!==false)throw new Error("Project list was not reported as real");
+  return Array.isArray(payload.projects) ? payload.projects : [];
+}
