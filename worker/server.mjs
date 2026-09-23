@@ -57,9 +57,27 @@ const preferredBuildProvider = process.env.FORGEOS_BUILD_PROVIDER || "local-proc
 const preferredDeployProvider = process.env.FORGEOS_DEPLOY_PROVIDER || "vercel";
 
 async function execute(runId, files) {
-  const selected = await selectProvider(buildProviders, preferredBuildProvider);
-  const result = await selected.provider.build(runId, files);
-  return { ...result, providerSelection: { selected: selected.provider.id, preferred: preferredBuildProvider, failover: selected.provider.id !== preferredBuildProvider } };
+  const ordered = [];
+  const preferred = buildProviders.find((p) => p.id === preferredBuildProvider);
+  if (preferred) ordered.push(preferred);
+  for (const provider of buildProviders) if (!ordered.includes(provider)) ordered.push(provider);
+  const checks = [];
+  const attempts = [];
+  for (const provider of ordered) {
+    let health;
+    try { health = await provider.health(); }
+    catch (error) { health = {ok:false,provider:provider.id,error:error instanceof Error?error.message:String(error)}; }
+    checks.push({provider,health});
+    if (!health?.ok) { attempts.push({provider:provider.id,status:"unavailable",error:health?.error||"provider_unhealthy"}); continue; }
+    try {
+      const result = await provider.build(runId, files);
+      return { ...result, providerSelection:{selected:provider.id,preferred:preferredBuildProvider,failover:provider.id!==preferredBuildProvider}, providerAttempts:[...attempts,{provider:provider.id,status:"succeeded"}] };
+    } catch (error) {
+      const message=error instanceof Error?error.message:String(error);
+      attempts.push({provider:provider.id,status:"failed",error:message});
+    }
+  }
+  throw new Error("all_build_providers_failed:"+attempts.map((a)=>a.provider+":"+a.error).join(","));
 }
 
 async function providerHealth() {
