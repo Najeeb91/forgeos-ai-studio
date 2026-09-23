@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import pg from "../worker/node_modules/pg/lib/index.js";
+import { createRequire } from "node:module";
 
-const { Pool } = pg;
+const require = createRequire(import.meta.url);
+const { Pool } = require("../worker/node_modules/pg");
 
 import { runMigrations } from "../worker/migrate.mjs";
 import { createProject, buildAndPersist } from "../worker/forge-core.mjs";
