@@ -7,7 +7,7 @@ import { createDatabaseProvider } from "./providers/database-provider.mjs";
 import { createSourceProvider } from "./providers/source-provider.mjs";
 import { createSecretsProvider } from "./providers/secrets-provider.mjs";
 import { createStorageProvider } from "./providers/storage-provider.mjs";
-import { buildAndPersist, repairAndBuild, latestSource, capabilities, readProject, listProjects, createProject } from "./forge-core.mjs";
+import { buildAndPersist, repairAndBuild, autoRepairAndBuild, latestSource, capabilities, readProject, listProjects, createProject } from "./forge-core.mjs";
 import { runMigrations } from "./migrate.mjs";
 import { prepareBuild, approveBuild, assertApproved } from "./approval-core.mjs";
 
@@ -107,12 +107,24 @@ const server = http.createServer(async (req, res) => {
       await assertApproved(pool, runId);
       const currentRun=(await pool.query("SELECT status FROM ai_runs WHERE id=$1",[runId])).rows[0];
       if(currentRun?.status==="cancelled") return json(res,409,{error:"run_cancelled",simulated:false});
-      const result = await buildAndPersist(pool, {
+      let result = await buildAndPersist(pool, {
         runId,
         projectSlug: payload.projectSlug || "forgeos",
         prompt: payload.prompt,
         execute,
       });
+      if(result.state !== "passed" && process.env.FORGEOS_AI_API_KEY){
+        result = await autoRepairAndBuild({
+          pool,
+          runId,
+          projectSlug: payload.projectSlug || "forgeos",
+          prompt: payload.prompt,
+          files: result.sourceFiles || [],
+          failure: result.error || result.stderr || result.message || "real build failed",
+          execute,
+          maxAttempts: 2,
+        });
+      }
       return json(res, result.state === "passed" ? 200 : 422, { ...result, approvalRequired: false });
     }
 
