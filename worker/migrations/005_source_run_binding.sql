@@ -1,0 +1,2 @@
+ALTER TABLE source_snapshots ADD COLUMN IF NOT EXISTS run_id UUID REFERENCES ai_runs(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_source_snapshots_run ON source_snapshots(run_id, created_at DESC);
