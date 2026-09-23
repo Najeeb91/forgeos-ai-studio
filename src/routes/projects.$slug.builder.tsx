@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, Play, ShieldAlert, X } from "lucide-react";
 import { toast } from "sonner";
 
@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { PageBody, EmptyState, Panel } from "@/components/forge/shell";
 import { Pill, RiskPill } from "@/components/forge/status";
 import { useForgeProject } from "@/lib/forge/use-project";
-import { approveForgeBuild, runForgeBuild } from "@/lib/forge/execution.functions";
+import { approveForgeBuild, getForgeExecutionRun, runForgeBuild } from "@/lib/forge/execution.functions";
 import { getForgeDeploymentStatus, releaseForgeProject } from "@/lib/forge/deploy.functions";
 import { cn } from "@/lib/utils";
 
@@ -45,6 +45,31 @@ function Builder() {
   const [building, setBuilding] = useState(false);
   const [approvalKind, setApprovalKind] = useState<"build"|"deployment">("build");
 
+  useEffect(() => {
+    const saved = globalThis.localStorage?.getItem(`forgeos:last-run:${slug}`);
+    if (!saved) return;
+    void getForgeExecutionRun({data:{runId:saved}}).then((remote:any) => {
+      const latestApproval = [...(remote.approvals ?? [])].reverse().find((a:any) => a.status === "pending") ?? [...(remote.approvals ?? [])].reverse()[0];
+      const latestTest = [...(remote.tests ?? [])].reverse()[0];
+      setApprovalKind(latestApproval?.action_type === "deploy_production" ? "deployment" : "build");
+      setActiveRun({
+        id:remote.run.id,
+        prompt:remote.run.prompt,
+        provider:remote.run.provider ?? "provider-router",
+        model:remote.run.model ?? "pending",
+        status:remote.run.status,
+        startedAt:remote.run.started_at ?? remote.run.created_at,
+        plan:(remote.steps ?? []).map((s:any)=>({id:String(s.id),title:String(s.title),detail:String(s.detail ?? ""),stage:String(s.stage),risk:String(s.risk ?? "low"),status:String(s.status ?? "pending"),order_idx:Number(s.order_idx ?? 0)})),
+        events:(remote.events ?? []).map((e:any)=>({id:String(e.id),at:e.created_at,level:e.level,stage:String(e.stage),message:String(e.message)})),
+        approval:latestApproval ? {id:String(latestApproval.id),step_id:latestApproval.step_id ?? undefined,actionType:latestApproval.action_type ?? undefined,target:latestApproval.target ?? undefined,reason:latestApproval.reason ?? undefined,risk:latestApproval.risk ?? undefined,status:latestApproval.status} : undefined,
+        testsPassed:latestTest?.status === "passed",
+        sourceFileCount:undefined,
+      });
+    }).catch(() => {
+      globalThis.localStorage?.removeItem(`forgeos:last-run:${slug}`);
+    });
+  }, [slug]);
+
   function addEvent(run:LocalRun,event:LocalRun["events"][number]) {
     return { ...run, events:[...run.events,event] };
   }
@@ -72,6 +97,7 @@ function Builder() {
         approval:result.approval ? {...result.approval} : undefined,
       };
       next=addEvent(next,{id:`${runId}-created`,at:new Date().toISOString(),level:"info",stage:"plan",message:result.state==="awaiting_approval"?"Durable plan created; waiting for human approval.":"Plan accepted for execution."});
+      globalThis.localStorage?.setItem(`forgeos:last-run:${slug}`, runId);
       setActiveRun(next);
       if(result.state==="awaiting_approval") toast("Plan ready — approve the gated execution step.");
       else if(result.state==="passed") toast.success(`Real build passed — ${result.sourceFileCount ?? 0} source files verified.`);
