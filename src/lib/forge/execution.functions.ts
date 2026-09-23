@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { approveBuild, executeBuild, getLatestGeneratedSource } from "./worker-client";
+import { approveBuild, executeBuild, getForgeRun, getLatestGeneratedSource } from "./worker-client";
 
 const buildInput=z.object({
   runId:z.string().min(1),
@@ -38,3 +38,7 @@ function getLatestGeneratedAppImpl(){
     .validator(z.object({projectSlug:z.string().min(1).max(255)}))
     .handler(async({data})=>getLatestGeneratedSource(data.projectSlug));
 }
+
+export const getForgeExecutionRun=createServerFn({method:"GET"})
+  .validator(z.object({runId:z.string().min(1)}))
+  .handler(async({data})=>getForgeRun(data.runId));
