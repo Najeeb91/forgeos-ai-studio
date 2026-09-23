@@ -39,3 +39,13 @@ export async function approveBuild(runId:string,approvalId:string,decision:"appr
   if(payload.simulated!==false)throw new Error("Approval was not durably recorded");
   return payload;
 }
+
+export async function createForgeProject(input:{slug:string;name:string;prompt:string}):Promise<{project:any}>{
+  const {url,token}=workerConfig();
+  const response=await fetch(url+"/worker/project",{method:"POST",headers:{"content-type":"application/json",authorization:"Bearer "+token},body:JSON.stringify(input)});
+  const text=await response.text();
+  let payload:any; try{payload=JSON.parse(text)}catch{throw new Error("Project creation worker returned invalid JSON (HTTP "+response.status+")");}
+  if(!response.ok)throw new Error(payload.error||"Project creation failed with HTTP "+response.status);
+  if(payload.simulated!==false)throw new Error("Project creation was not reported as real");
+  return payload;
+}
