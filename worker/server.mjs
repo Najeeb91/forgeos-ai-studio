@@ -260,29 +260,43 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-async function bootstrap() {
-  if (pool) {
+let databaseReady = false;
+let databaseLastError = null;
+
+async function initializeDatabase() {
+  if (!pool) return;
+  try {
     await runMigrations(pool);
+    databaseReady = true;
+    databaseLastError = null;
     console.log(JSON.stringify({ service: "forgeos-execution-worker", databaseSchema: "migrations-ready" }));
+  } catch (error) {
+    databaseReady = false;
+    databaseLastError = error instanceof Error ? error.message : String(error);
+    console.error(JSON.stringify({
+      service: "forgeos-execution-worker",
+      database: "unavailable",
+      error: databaseLastError,
+      retrying: true
+    }));
+    setTimeout(initializeDatabase, 10000);
   }
+}
+
+function startServer() {
   server.listen(PORT, "0.0.0.0", () => {
     console.log(JSON.stringify({
       service: "forgeos-execution-worker",
       port: PORT,
       realExecution: true,
       authenticatedExecution: Boolean(WORKER_TOKEN),
+      databaseConfigured: Boolean(pool),
     }));
   });
 }
 
-bootstrap().catch((error) => {
-  console.error(JSON.stringify({
-    service: "forgeos-execution-worker",
-    startup: "failed",
-    error: error instanceof Error ? error.message : String(error)
-  }));
-  process.exit(1);
-});
+startServer();
+initializeDatabase();
 
 process.on("SIGTERM", async () => {
   await databaseProvider.close();
