@@ -346,12 +346,20 @@ const server = http.createServer(async (req, res) => {
 let databaseReady = false;
 let databaseLastError = null;
 
+async function recoverInterruptedRuns() {
+  if (!pool) return;
+  await pool.query("UPDATE ai_runs SET status='recovery_required',completed_at=now() WHERE status IN ('testing','executing','building','repairing','deploying')");
+  await pool.query("UPDATE provider_attempts SET status='interrupted',completed_at=now(),error=coalesce(error,'worker_restart_interrupted_attempt') WHERE status='running'");
+  await pool.query("INSERT INTO ai_events(id,run_id,level,stage,message) SELECT gen_random_uuid(),id,'warn','recovery','Worker restart detected; execution requires explicit recovery.' FROM ai_runs WHERE status='recovery_required' AND updated_at > now() - interval '30 seconds'").catch(()=>{});
+}
+
 async function initializeDatabase() {
   if (!pool) return;
   try {
     await runMigrations(pool);
     databaseReady = true;
     databaseLastError = null;
+    await recoverInterruptedRuns();
     console.log(JSON.stringify({ service: "forgeos-execution-worker", databaseSchema: "migrations-ready" }));
   } catch (error) {
     databaseReady = false;
