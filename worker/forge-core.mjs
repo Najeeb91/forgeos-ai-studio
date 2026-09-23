@@ -318,7 +318,7 @@ export async function repairAndBuild({runId,prompt,files,failure,execute}) {
   const generated = await selected.provider.repair({prompt,files,failure});
   const artifacts = validateArtifacts(generated.artifacts);
   const result = await execute(runId,artifacts);
-  return {...result,repairSimulated:false,generationMode:"ai-repair",provider:selected.provider.id,model:generated.model,sourceFiles:artifacts,
+  return {...result,repairSimulated:false,generationMode:"ai-repair",provider:generated.provider || selected.provider.id,model:generated.model,sourceFiles:artifacts,
     providerSelection:{selected:selected.provider.id,preferred:preferredAIProvider,failover:selected.provider.id!==preferredAIProvider}};
 }
 
