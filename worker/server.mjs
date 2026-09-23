@@ -105,6 +105,8 @@ const server = http.createServer(async (req, res) => {
         return json(res, 200, { ...gate, simulated: false });
       }
       await assertApproved(pool, runId);
+      const currentRun=(await pool.query("SELECT status FROM ai_runs WHERE id=$1",[runId])).rows[0];
+      if(currentRun?.status==="cancelled") return json(res,409,{error:"run_cancelled",simulated:false});
       const result = await buildAndPersist(pool, {
         runId,
         projectSlug: payload.projectSlug || "forgeos",
