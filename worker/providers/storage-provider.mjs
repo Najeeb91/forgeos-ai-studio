@@ -9,14 +9,8 @@ export class PostgresProjectStorageProvider extends ForgeOSProvider {
     const db=await this.database.health();
     return {ok:db.ok,provider:this.id,capability:this.capability,realExecution:db.ok,backend:db.provider,mode:"database-backed-project-storage"};
   }
-  async putText({projectId,path,content,metadata={}}) {
-    if(!projectId||!path) throw new Error("storage_key_required");
-    return {projectId,path,bytes:Buffer.byteLength(String(content||"")),metadata,stored:true,provider:this.id};
-  }
-  async getText({projectId,path}) {
-    if(!projectId||!path) throw new Error("storage_key_required");
-    return null;
-  }
+  async putText() { throw new Error("storage_write_adapter_not_connected"); }
+  async getText() { throw new Error("storage_read_adapter_not_connected"); }
 }
 
 export function createStorageProvider(databaseProvider){
