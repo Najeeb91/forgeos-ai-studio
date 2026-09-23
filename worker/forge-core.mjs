@@ -34,7 +34,7 @@ function validateArtifacts(artifacts) {
   return artifacts;
 }
 
-async async function aiGenerate(prompt) {
+async function aiGenerate(prompt) {
   const selected = await selectProvider(aiProviders, preferredAIProvider);
   const generated = await selected.provider.generate(prompt);
   return {...generated, artifacts: validateArtifacts(generated.artifacts),
@@ -333,7 +333,7 @@ async function persistRepair(pool,{runId,prompt,files,failure,result,generation,
   }
   const passed=result.state==="passed" && result.simulated===false;
   const testRunId=randomUUID();
-  await pool.query("insert into test_runs(id,project_id,snapshot_id,status) values($1,$2,$3,$4)",[testRunId,projectId,snapshotId,passed?"passed":"failed"]);
+  await pool.query("insert into test_runs(id,project_id,run_id,snapshot_id,status) values($1,$2,$3,$4,$5)",[testRunId,projectId,runId,snapshotId,passed?"passed":"failed"]);
   await pool.query("insert into test_results(id,test_run_id,name,suite,status,duration_ms,detail) values($1,$2,'AI repair build','repair',$3,$4,$5)",[randomUUID(),testRunId,passed?"passed":"failed",Number(result?.build?.durationMs||result?.install?.durationMs||0),JSON.stringify({failure,phase:result.phase,state:result.state})]);
   await pool.query("insert into ai_events(id,run_id,level,stage,message) values($1,$2,$3,'repair',$4)",[randomUUID(),runId,passed?"info":"error",passed?"AI repair produced a build-verified source snapshot.":"AI repair attempt failed during real execution."]);
   await pool.query("insert into audit_events(id,project_id,actor,actor_name,action,target,risk,approved,diff_summary,stage) values($1,$2,'system','ForgeOS',$3,$4,'medium',NULL,$5,'repair')",[randomUUID(),projectId,passed?"repair_passed":"repair_failed",runId,String(failure).slice(0,2000)]);
