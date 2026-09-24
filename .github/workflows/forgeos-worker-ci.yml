@@ -11,9 +11,6 @@ on:
       - ".github/workflows/forgeos-worker-ci.yml"
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 concurrency:
   group: forgeos-worker-${{ github.ref }}
   cancel-in-progress: true
@@ -35,44 +32,6 @@ jobs:
         run: npm install --prefix worker --ignore-scripts --no-audit --no-fund
       - name: Syntax check
         run: node --check worker/server.mjs && node --check worker/forge-core.mjs && node --check worker/migrate.mjs && node --check worker/approval-core.mjs && node --check worker/deployment-core.mjs
-      - name: Apply worker project contract repair
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          p = Path("worker/server.mjs")
-          s = p.read_text()
-          old_import = 'import { buildAndPersist, repairAndBuild, autoRepairAndBuild, latestSource, capabilities, readProject, listProjects, createProject } from "./forge-core.mjs";'
-          new_import = 'import { buildAndPersist, repairAndBuild, autoRepairAndBuild, latestSource, capabilities, readProject, listProjects } from "./forge-core.mjs";'
-          old_route = '      const project = await createProject(pool, { slug: payload.slug, name: payload.name, prompt: payload.prompt });\n      return json(res, 201, { project: project?.project || null, simulated: false });'
-          new_route = '      const projectId = await ensureProject(pool, String(payload.slug).toLowerCase(), payload.prompt);\n      const project = await readProject(pool, String(payload.slug).toLowerCase());\n      return json(res, 201, { project: project?.project || null, projectId, simulated: false });'
-          marker = 'import { prepareBuild, approveBuild, assertApproved } from "./approval-core.mjs";'
-          replacement = 'import { prepareBuild, approveBuild, assertApproved, ensureProject } from "./approval-core.mjs";'
-          changed = False
-          if old_import in s:
-              s = s.replace(old_import, new_import, 1)
-              changed = True
-          if old_route in s:
-              s = s.replace(old_route, new_route, 1)
-              changed = True
-          if marker in s:
-              s = s.replace(marker, replacement, 1)
-              changed = True
-          if changed:
-              p.write_text(s)
-          print("worker contract repair:", "applied" if changed else "already applied")
-          PY
-          node --check worker/server.mjs
-      - name: Commit worker contract repair when needed
-        run: |
-          if git diff --quiet -- worker/server.mjs; then
-            echo "No worker contract repair needed."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add worker/server.mjs
-          git commit -m "fix(worker): use shared ensureProject contract"
-          git push origin HEAD:main
       - name: Validate migrations
         run: test -s worker/migrations/001_baseline.sql && test -s worker/migrations/002_memory_and_provider.sql
       - name: Validate Dockerfile
