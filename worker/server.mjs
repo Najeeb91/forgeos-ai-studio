@@ -57,8 +57,9 @@ const buildProviders = createBuildProviders();
 const deployProviders = createDeployProviders(secretsProvider);
 const preferredBuildProvider = process.env.FORGEOS_BUILD_PROVIDER || "local-process";
 const preferredDeployProvider = process.env.FORGEOS_DEPLOY_PROVIDER || "vercel";
+const activeControllers = new Map();
 
-async function execute(runId, files) {
+async function execute(runId, files, options = {}) {
   const ordered = [];
   const preferred = buildProviders.find((p) => p.id === preferredBuildProvider);
   if (preferred) ordered.push(preferred);
@@ -70,9 +71,10 @@ async function execute(runId, files) {
     try { health = await provider.health(); }
     catch (error) { health = {ok:false,provider:provider.id,error:error instanceof Error?error.message:String(error)}; }
     checks.push({provider,health});
+    if (options.signal?.aborted) throw new Error("run_cancelled");
     if (!health?.ok) { attempts.push({provider:provider.id,status:"unavailable",error:health?.error||"provider_unhealthy"}); continue; }
     try {
-      const result = await provider.build(runId, files);
+      const result = await provider.build(runId, files, options);
       return { ...result, providerSelection:{selected:provider.id,preferred:preferredBuildProvider,failover:provider.id!==preferredBuildProvider}, providerAttempts:[...attempts,{provider:provider.id,status:"succeeded"}] };
     } catch (error) {
       const message=error instanceof Error?error.message:String(error);
@@ -397,12 +399,17 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && req.url === "/worker/jobs") {
-      if (!authorized(req)) {
+      if (!(await authorized(req))) {
         return json(res, 401, { error: "worker_auth_required" });
       }
 
       const payload = await body(req);
-      const result = await execute(payload.runId || null, payload.files || []);
+      const controller = new AbortController();
+      const executionRunId = payload.runId || null;
+      if (executionRunId) activeControllers.set(executionRunId, controller);
+      let result;
+      try { result = await execute(executionRunId, payload.files || [], { signal: controller.signal }); }
+      finally { if (executionRunId) activeControllers.delete(executionRunId); }
 
       return json(res, result.state === "passed" ? 200 : 422, result);
     }
@@ -429,7 +436,9 @@ const server = http.createServer(async (req, res) => {
       const run=(await pool.query("SELECT id,status FROM ai_runs WHERE id=$1 LIMIT 1",[payload.runId])).rows[0];
       if(!run)return json(res,404,{error:"run_not_found"});
       if(["deployed","failed","cancelled","rejected"].includes(run.status))return json(res,409,{error:"run_already_terminal",status:run.status});
-      await transitionRun(pool,payload.runId,"cancelled",{eventStage:"cancelled",message:"Run cancelled by user."});
+      const activeController = activeControllers.get(payload.runId);
+      if (activeController) activeController.abort();
+      await transitionRun(pool,payload.runId,"cancelled",{eventStage:"cancelled",message:activeController ? "Run cancellation requested; active provider process aborted." : "Run cancelled by user."});
       await pool.query("UPDATE provider_attempts SET status='cancelled',completed_at=now(),error=coalesce(error,'cancelled_by_user') WHERE run_id=$1 AND status IN ('running','pending')",[payload.runId]);
       await pool.query("UPDATE ai_run_steps SET status='cancelled' WHERE run_id=$1 AND status IN ('running','pending','awaiting_review')",[payload.runId]);
       return json(res,200,{accepted:true,cancelled:true,simulated:false,runId:payload.runId});
