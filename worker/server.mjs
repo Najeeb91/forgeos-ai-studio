@@ -8,9 +8,9 @@ import { createSourceProvider } from "./providers/source-provider.mjs";
 import { createSecretsProvider } from "./providers/secrets-provider.mjs";
 import { createAuthProvider } from "./providers/auth-provider.mjs";
 import { createStorageProvider } from "./providers/storage-provider.mjs";
-import { buildAndPersist, repairAndBuild, autoRepairAndBuild, latestSource, capabilities, readProject, listProjects, createProject } from "./forge-core.mjs";
+import { buildAndPersist, repairAndBuild, autoRepairAndBuild, latestSource, capabilities, readProject, listProjects } from "./forge-core.mjs";
 import { runMigrations } from "./migrate.mjs";
-import { prepareBuild, approveBuild, assertApproved } from "./approval-core.mjs";
+import { prepareBuild, approveBuild, assertApproved, ensureProject } from "./approval-core.mjs";
 import { transitionRun } from "./run-state.mjs";
 
 const PORT = Number(process.env.PORT || 8080);
@@ -387,8 +387,9 @@ const server = http.createServer(async (req, res) => {
       if (!pool) return json(res, 503, { error: "worker_database_not_configured" });
       const payload = await body(req);
       if (!payload.slug || !payload.name || !payload.prompt) return json(res, 400, { error: "slug_name_prompt_required" });
-      const project = await createProject(pool, { slug: payload.slug, name: payload.name, prompt: payload.prompt });
-      return json(res, 201, { project: project?.project || null, simulated: false });
+      const projectId = await ensureProject(pool, String(payload.slug).toLowerCase(), payload.prompt);
+      const project = await readProject(pool, String(payload.slug).toLowerCase());
+      return json(res, 201, { project: project?.project || null, projectId, simulated: false });
     }
 
     if (req.method === "GET" && req.url?.startsWith("/worker/project/")) {
