@@ -129,12 +129,19 @@ const server = http.createServer(async (req, res) => {
       await assertApproved(pool, runId);
       const currentRun=(await pool.query("SELECT status FROM ai_runs WHERE id=$1",[runId])).rows[0];
       if(currentRun?.status==="cancelled") return json(res,409,{error:"run_cancelled",simulated:false});
-      let result = await buildAndPersist(pool, {
-        runId,
-        projectSlug: payload.projectSlug || "forgeos",
-        prompt: payload.prompt,
-        execute,
-      });
+      const controller = new AbortController();
+      activeControllers.set(runId, controller);
+      let result;
+      try {
+        result = await buildAndPersist(pool, {
+          runId,
+          projectSlug: payload.projectSlug || "forgeos",
+          prompt: payload.prompt,
+          execute: (id, files) => execute(id, files, { signal: controller.signal }),
+        });
+      } finally {
+        activeControllers.delete(runId);
+      }
       if(result.state !== "passed" && process.env.FORGEOS_AI_API_KEY){
         result = await autoRepairAndBuild({
           pool,
