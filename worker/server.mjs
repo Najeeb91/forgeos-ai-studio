@@ -115,7 +115,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && req.url === "/worker/build") {
-      if (!authorized(req)) return json(res, 401, { error: "worker_auth_required" });
+      if (!(await authorized(req))) return json(res, 401, { error: "worker_auth_required" });
       if (!pool) return json(res, 503, { error: "worker_database_not_configured" });
       const payload = await body(req);
       if (!payload.prompt || typeof payload.prompt !== "string") return json(res, 400, { error: "prompt_required" });
@@ -149,7 +149,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && req.url === "/worker/deploy") {
-      if (!authorized(req)) return json(res, 401, { error: "worker_auth_required" });
+      if (!(await authorized(req))) return json(res, 401, { error: "worker_auth_required" });
       if (!pool) return json(res, 503, { error: "worker_database_not_configured" });
       const payload = await body(req);
       const runId = payload.runId;
@@ -227,7 +227,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && req.url?.startsWith("/worker/deploy/status")) {
-      if (!authorized(req)) return json(res, 401, { error: "worker_auth_required" });
+      if (!(await authorized(req))) return json(res, 401, { error: "worker_auth_required" });
       if (!pool) return json(res, 503, { error: "worker_database_not_configured" });
       const url = new URL(req.url, "http://forgeos-worker");
       const deploymentId = url.searchParams.get("deploymentId");
@@ -288,7 +288,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && req.url === "/worker/source/push") {
-      if (!authorized(req)) return json(res, 401, { error: "worker_auth_required" });
+      if (!(await authorized(req))) return json(res, 401, { error: "worker_auth_required" });
       if (!pool) return json(res, 503, { error: "worker_database_not_configured" });
       const payload = await body(req);
       const runId = payload.runId;
@@ -317,7 +317,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && req.url === "/worker/approve") {
-      if (!authorized(req)) return json(res, 401, { error: "worker_auth_required" });
+      if (!(await authorized(req))) return json(res, 401, { error: "worker_auth_required" });
       if (!pool) return json(res, 503, { error: "worker_database_not_configured" });
       const payload = await body(req);
       if (!payload.runId || !payload.approvalId) return json(res, 400, { error: "runId_and_approvalId_required" });
@@ -335,7 +335,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "POST" && req.url === "/worker/repair") {
-      if (!authorized(req)) return json(res, 401, { error: "worker_auth_required" });
+      if (!(await authorized(req))) return json(res, 401, { error: "worker_auth_required" });
       const payload = await body(req);
       const result = await repairAndBuild({
         pool,
@@ -350,7 +350,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && req.url?.startsWith("/worker/run/")) {
-      if (!authorized(req)) return json(res, 401, { error: "worker_auth_required" });
+      if (!(await authorized(req))) return json(res, 401, { error: "worker_auth_required" });
       if (!pool) return json(res, 503, { error: "worker_database_not_configured" });
       const runId = decodeURIComponent(req.url.slice("/worker/run/".length));
       if (!runId) return json(res, 400, { error: "runId_required" });
@@ -368,13 +368,13 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && req.url === "/worker/projects") {
-      if (!authorized(req)) return json(res, 401, { error: "worker_auth_required" });
+      if (!(await authorized(req))) return json(res, 401, { error: "worker_auth_required" });
       if (!pool) return json(res, 503, { error: "worker_database_not_configured" });
       return json(res, 200, { projects: await listProjects(pool), simulated: false });
     }
 
     if (req.method === "POST" && req.url === "/worker/project") {
-      if (!authorized(req)) return json(res, 401, { error: "worker_auth_required" });
+      if (!(await authorized(req))) return json(res, 401, { error: "worker_auth_required" });
       if (!pool) return json(res, 503, { error: "worker_database_not_configured" });
       const payload = await body(req);
       if (!payload.slug || !payload.name || !payload.prompt) return json(res, 400, { error: "slug_name_prompt_required" });
@@ -383,7 +383,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && req.url?.startsWith("/worker/project/")) {
-      if (!authorized(req)) return json(res, 401, { error: "worker_auth_required" });
+      if (!(await authorized(req))) return json(res, 401, { error: "worker_auth_required" });
       if (!pool) return json(res, 503, { error: "worker_database_not_configured" });
       const slug = decodeURIComponent(req.url.slice("/worker/project/".length));
       const project = await readProject(pool, slug);
@@ -391,7 +391,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && req.url === "/worker/source/latest") {
-      if (!authorized(req)) return json(res, 401, { error: "worker_auth_required" });
+      if (!(await authorized(req))) return json(res, 401, { error: "worker_auth_required" });
       if (!pool) return json(res, 503, { error: "worker_database_not_configured" });
       return json(res, 200, { files: await latestSource(pool, req.headers["x-forgeos-project-slug"] || "forgeos") });
     }
