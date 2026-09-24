@@ -1,0 +1,51 @@
+name: ForgeOS Worker Runtime Repair
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/repair-worker-runtime.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Apply ensureProject migration
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path("worker/server.mjs")
+          s = p.read_text()
+          old_import = 'import { buildAndPersist, repairAndBuild, autoRepairAndBuild, latestSource, capabilities, readProject, listProjects, createProject } from "./forge-core.mjs";'
+          new_import = 'import { buildAndPersist, repairAndBuild, autoRepairAndBuild, latestSource, capabilities, readProject, listProjects } from "./forge-core.mjs";'
+          if old_import not in s:
+              raise SystemExit("stale forge-core createProject import not found")
+          s = s.replace(old_import, new_import, 1)
+          old_route = '      const project = await createProject(pool, { slug: payload.slug, name: payload.name, prompt: payload.prompt });\n      return json(res, 201, { project: project?.project || null, simulated: false });'
+          new_route = '      const projectId = await ensureProject(pool, String(payload.slug).toLowerCase(), payload.prompt);\n      const project = await readProject(pool, String(payload.slug).toLowerCase());\n      return json(res, 201, { project: project?.project || null, projectId, simulated: false });'
+          if old_route not in s:
+              raise SystemExit("stale createProject route not found")
+          s = s.replace(old_route, new_route, 1)
+          marker = 'import { prepareBuild, approveBuild, assertApproved } from "./approval-core.mjs";'
+          replacement = 'import { prepareBuild, approveBuild, assertApproved, ensureProject } from "./approval-core.mjs";'
+          if marker not in s:
+              raise SystemExit("approval-core import marker not found")
+          s = s.replace(marker, replacement, 1)
+          p.write_text(s)
+          PY
+          node --check worker/server.mjs
+          grep -n "createProject\|ensureProject" worker/server.mjs
+      - name: Commit corrective change
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add worker/server.mjs
+          git diff --cached --exit-code && exit 1 || true
+          git commit -m "fix(worker): use shared ensureProject contract"
+          git push origin HEAD:main
