@@ -245,7 +245,23 @@ const server = http.createServer(async (req, res) => {
       if (!provider || typeof provider.status !== "function") return json(res, 409, { error: "deployment_status_provider_unavailable", provider: row.adapter });
       const secretName = provider.id === "netlify" ? "NETLIFY_AUTH_TOKEN" : "VERCEL_TOKEN";
       const secret = await secretsProvider.get(secretName);
-      const observed = await provider.status({ token: secret?.value || "", deploymentId: row.provider_job_id });
+      let observed;
+      try {
+        observed = await provider.status({ token: secret?.value || "", deploymentId: row.provider_job_id });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        await pool.query(
+          "INSERT INTO deployment_observations(id,deployment_id,status,url,provider_job_id,simulated,detail) VALUES($1,$2,'observation_error',$3,$4,false,$5::jsonb)",
+          [randomUUID(), row.id, row.url || "", row.provider_job_id || null, JSON.stringify({ provider: row.adapter, error: message })]
+        );
+        return json(res, 503, {
+          error: "deployment_status_provider_failed",
+          simulated: false,
+          provider: row.adapter,
+          deployment: { id: row.id, runId: row.run_id, status: row.status },
+          detail: message,
+        });
+      }
       const statusMap = {
         READY: "ready",
         COMPLETED: "ready",
