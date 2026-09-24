@@ -35,6 +35,7 @@ type LocalRun = {
   approval?: { id:string; step_id?:string; actionType?:string; target?:string; reason?:string; risk?:string; status:string };
   testsPassed?:boolean;
   sourceFileCount?:number;
+  providerAttempts?:Array<{id:string;kind:string;provider:string;capability:string;status:string;priority?:number;simulated:boolean;started_at?:string;completed_at?:string;error?:string}>;
 };
 
 function Builder() {
@@ -64,6 +65,7 @@ function Builder() {
         approval:latestApproval ? {id:String(latestApproval.id),step_id:latestApproval.step_id ?? undefined,actionType:latestApproval.action_type ?? undefined,target:latestApproval.target ?? undefined,reason:latestApproval.reason ?? undefined,risk:latestApproval.risk ?? undefined,status:latestApproval.status} : undefined,
         testsPassed:latestTest?.status === "passed",
         sourceFileCount:undefined,
+        providerAttempts:(remote.providerAttempts ?? []).map((a:any)=>({id:String(a.id),kind:String(a.kind),provider:String(a.provider),capability:String(a.capability),status:String(a.status),priority:Number(a.priority ?? 0),simulated:Boolean(a.simulated),started_at:a.started_at,completed_at:a.completed_at,error:a.error ?? undefined})),
       });
     }).catch(() => {
       globalThis.localStorage?.removeItem(`forgeos:last-run:${slug}`);
@@ -95,6 +97,7 @@ function Builder() {
         id:runId,prompt:requestedPrompt,provider:result.provider ?? "provider-router",
         model:result.model ?? "pending",status:result.state,startedAt,plan,events:[],
         approval:result.approval ? {...result.approval} : undefined,
+        providerAttempts:[],
       };
       next=addEvent(next,{id:`${runId}-created`,at:new Date().toISOString(),level:"info",stage:"plan",message:result.state==="awaiting_approval"?"Durable plan created; waiting for human approval.":"Plan accepted for execution."});
       globalThis.localStorage?.setItem(`forgeos:last-run:${slug}`, runId);
@@ -245,6 +248,20 @@ function Builder() {
                 <div><dt className="text-muted-foreground">started</dt><dd>{new Date(run.startedAt).toLocaleTimeString()}</dd></div>
               </dl>
             </Panel>
+            {run.providerAttempts?.length ? (
+              <Panel title="Provider execution evidence">
+                <div className="space-y-2 font-mono text-xs">
+                  {run.providerAttempts.map((attempt)=>(
+                    <div key={attempt.id} className="flex flex-wrap items-center gap-2 rounded-md border border-border px-3 py-2">
+                      <Pill tone={attempt.status==="succeeded"?"success":attempt.status==="failed"?"danger":attempt.status==="running"?"warning":"neutral"}>{attempt.status}</Pill>
+                      <span>{attempt.provider}</span>
+                      <span className="text-muted-foreground">{attempt.kind}/{attempt.capability}</span>
+                      {attempt.error ? <span className="text-destructive">{attempt.error}</span> : null}
+                    </div>
+                  ))}
+                </div>
+              </Panel>
+            ) : null}
             <Panel title="Execution log" bodyClassName="p-0">
               <div className="max-h-[520px] overflow-y-auto font-mono text-xs">
                 {run.events.map((e)=><div key={e.id} className="flex gap-3 border-b border-border/60 px-4 py-2 last:border-0"><span className="text-muted-foreground">{e.at}</span><span className="w-24 shrink-0 text-muted-foreground">{e.stage}</span><span className={cn("min-w-0 flex-1",levelTone[e.level])}>{e.message}</span></div>)}
