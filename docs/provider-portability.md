@@ -37,7 +37,7 @@ If the selected provider becomes unavailable, ForgeOS should select another conf
 
 ## Current shipped status (2026-09-22)
 - Provider registry: shipped.
-- Portable GitHub Actions workflow: shipped and independently usable as a CI/build plane.
+- Portable GitHub Actions E2E workflow: shipped as an independent verification plane; it is not silently used as production failover.
 - Durable provider-attempt records: shipped.
-- Automatic per-run failover: **not yet shipped**; do not represent the standby GitHub workflow as automatic failover.
+- Automatic per-run provider failover: shipped for build, AI generation/repair, and deployment adapters; each attempt is persisted against the exact run.
 - Railway: current execution host adapter, but not a product dependency.
