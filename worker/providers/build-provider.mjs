@@ -23,13 +23,14 @@ function validateFiles(files) {
   }
 }
 
-function exec(command, args, cwd, extraEnv = {}) {
+function exec(command, args, cwd, extraEnv = {}, signal = undefined) {
   return new Promise((resolveRun) => {
     execFile(command, args, {
       cwd,
       timeout: MAX_DURATION_MS,
       maxBuffer: MAX_OUTPUT_BYTES,
       env: { PATH: process.env.PATH, HOME: cwd, NODE_ENV: "production", CI: "1", ...extraEnv },
+      signal,
     }, (error, stdout, stderr) => resolveRun({
       ok: !error,
       code: typeof error?.code === "number" ? error.code : error ? null : 0,
@@ -64,16 +65,16 @@ function validatePackage(files) {
 export class LocalProcessBuildProvider {
   constructor() { this.id = "local-process"; this.capability = "build"; }
   async health() { return { ok: true, provider: this.id, isolated: false, realExecution: true }; }
-  async build(runId, files) {
+  async build(runId, files, options = {}) {
     validateFiles(files);
     validatePackage(files);
     const jobId = randomUUID();
     const root = await mkdtemp(join(tmpdir(), "forgeos-job-"));
     try {
       await writeWorkspace(files, root);
-      const install = await exec("npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund"], root, { NODE_ENV: "development" });
+      const install = await exec("npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund"], root, { NODE_ENV: "development" }, options.signal);
       if (!install.ok) return { jobId, runId, state:"failed", phase:"install", simulated:false, provider:this.id, install };
-      const built = await exec("npm", ["run", "build"], root);
+      const built = await exec("npm", ["run", "build"], root, {}, options.signal);
       const artifact = await stat(join(root, "dist")).then(() => ({type:"directory",path:"dist"})).catch(() => null);
       return { jobId, runId, state:built.ok ? "passed" : "failed", phase:"build", simulated:false, provider:this.id, artifact, build:built,
         policy:{workspaceOnly:true, commandAllowlist:["npm install --ignore-scripts --no-audit --no-fund","npm run build"], maxDurationMs:MAX_DURATION_MS, maxOutputBytes:MAX_OUTPUT_BYTES, network:"dependency-install-only"} };
@@ -89,7 +90,7 @@ export class DockerBuildProvider {
     const image = await exec("docker", ["image","inspect",DOCKER_IMAGE], process.cwd());
     return { ok:image.ok, provider:this.id, isolated:true, realExecution:image.ok, image:DOCKER_IMAGE, imagePresent:image.ok, error:image.ok ? null : "docker_image_missing" };
   }
-  async build(runId, files) {
+  async build(runId, files, options = {}) {
     validateFiles(files);
     validatePackage(files);
     const health = await this.health();
@@ -100,10 +101,10 @@ export class DockerBuildProvider {
     try {
       await writeWorkspace(files, root);
       const common = ["run","--rm","--init","--security-opt","no-new-privileges","--cap-drop=ALL","--pids-limit","128","--memory","1g","--cpus","2","--tmpfs","/tmp:rw,nosuid,nodev,noexec,size=256m"];
-      const install = await exec("docker", [...common,"--network","bridge","-v",root+":/workspace:rw","-v",volume+":/workspace/node_modules",DOCKER_IMAGE,"sh","-lc","cd /workspace && npm install --ignore-scripts --no-audit --no-fund"], root);
+      const install = await exec("docker", [...common,"--network","bridge","-v",root+":/workspace:rw","-v",volume+":/workspace/node_modules",DOCKER_IMAGE,"sh","-lc","cd /workspace && npm install --ignore-scripts --no-audit --no-fund"], root, {}, options.signal);
       if (!install.ok) return { jobId, runId, state:"failed", phase:"install", simulated:false, provider:this.id, install,
         policy:{isolated:true, network:"dependency-install-only", image:DOCKER_IMAGE} };
-      const built = await exec("docker", [...common,"--network","none","--read-only","-v",root+":/workspace:ro","-v",volume+":/workspace/node_modules",DOCKER_IMAGE,"sh","-lc","cd /workspace && npm run build"], root);
+      const built = await exec("docker", [...common,"--network","none","--read-only","-v",root+":/workspace:ro","-v",volume+":/workspace/node_modules",DOCKER_IMAGE,"sh","-lc","cd /workspace && npm run build"], root, {}, options.signal);
       const artifact = await stat(join(root, "dist")).then(() => ({type:"directory",path:"dist"})).catch(() => null);
       return { jobId, runId, state:built.ok ? "passed" : "failed", phase:"build", simulated:false, provider:this.id, artifact, build:built,
         policy:{isolated:true, network:"install-only", image:DOCKER_IMAGE, readOnlyBuildFilesystem:true, noNewPrivileges:true, capDrop:"ALL", pidsLimit:128, memory:"1g", cpus:2, commandAllowlist:["npm install --ignore-scripts --no-audit --no-fund","npm run build"], maxDurationMs:MAX_DURATION_MS, maxOutputBytes:MAX_OUTPUT_BYTES} };
