@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { transitionRun } from "./run-state.mjs";
 
-async function ensureProject(pool, projectSlug, prompt) {
+export async function ensureProject(pool, projectSlug, prompt) {
   const id = randomUUID();
   const name = projectSlug === "forgeos"
     ? "ForgeOS"
