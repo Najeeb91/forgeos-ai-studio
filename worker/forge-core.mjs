@@ -194,72 +194,14 @@ export async function readProject(pool, slug) {
   };
 }
 
-export async function ensureSchema(pool) {
-  if (!pool) return;
-  await pool.query(
-    'CREATE TABLE IF NOT EXISTS projects (id uuid PRIMARY KEY,slug varchar(255) UNIQUE NOT NULL,name varchar(255) NOT NULL,tagline text NOT NULL,description text NOT NULL,status varchar(50) NOT NULL,health varchar(50) NOT NULL,owner varchar(255) NOT NULL,stack jsonb NOT NULL,benchmark boolean DEFAULT false,preview_route varchar(255),preview_status varchar(50),preview_last_built_at timestamptz,created_at timestamptz DEFAULT now() NOT NULL,updated_at timestamptz DEFAULT now() NOT NULL);'+'CREATE TABLE IF NOT EXISTS project_context_entries (id uuid PRIMARY KEY,project_id uuid NOT NULL REFERENCES projects(id) ON DELETE CASCADE,kind varchar(50) NOT NULL,title varchar(255) NOT NULL,content text NOT NULL,source varchar(100) NOT NULL,occurred_at timestamptz NOT NULL,created_at timestamptz DEFAULT now() NOT NULL);'+
-    'CREATE TABLE IF NOT EXISTS project_brain_versions (id uuid PRIMARY KEY,project_id uuid NOT NULL REFERENCES projects(id) ON DELETE CASCADE,version integer NOT NULL,vision text NOT NULL,requirements jsonb NOT NULL,decisions jsonb NOT NULL,architecture jsonb NOT NULL,"schema" jsonb NOT NULL,integrations jsonb NOT NULL,created_at timestamptz DEFAULT now() NOT NULL);'+
-    'CREATE TABLE IF NOT EXISTS pipeline_stages (id uuid PRIMARY KEY,project_id uuid NOT NULL REFERENCES projects(id) ON DELETE CASCADE,stage_id varchar(50) NOT NULL,label varchar(100) NOT NULL,status varchar(50) NOT NULL,summary text NOT NULL,progress integer NOT NULL,updated_at timestamptz DEFAULT now() NOT NULL);'+
-    'CREATE TABLE IF NOT EXISTS source_snapshots (id uuid PRIMARY KEY,project_id uuid NOT NULL REFERENCES projects(id) ON DELETE CASCADE,commit_sha varchar(255),message text,created_at timestamptz DEFAULT now() NOT NULL);'+
-    'CREATE TABLE IF NOT EXISTS source_files (id uuid PRIMARY KEY,snapshot_id uuid NOT NULL REFERENCES source_snapshots(id) ON DELETE CASCADE,path text NOT NULL,kind varchar(50) NOT NULL,language varchar(50),loc integer,status varchar(50),content text);'+
-    'CREATE TABLE IF NOT EXISTS ai_runs (id uuid PRIMARY KEY,project_id uuid NOT NULL REFERENCES projects(id) ON DELETE CASCADE,prompt text NOT NULL,provider varchar(100) NOT NULL,model varchar(100) NOT NULL,status varchar(50) NOT NULL,tokens_in integer NOT NULL DEFAULT 0,tokens_out integer NOT NULL DEFAULT 0,started_at timestamptz DEFAULT now() NOT NULL,completed_at timestamptz);'+
-    'CREATE TABLE IF NOT EXISTS ai_run_steps (id uuid PRIMARY KEY,run_id uuid NOT NULL REFERENCES ai_runs(id) ON DELETE CASCADE,title varchar(255) NOT NULL,detail text NOT NULL,stage varchar(50) NOT NULL,risk varchar(50) NOT NULL,status varchar(50) NOT NULL,order_idx integer NOT NULL);'+
-    'CREATE TABLE IF NOT EXISTS ai_events (id uuid PRIMARY KEY,run_id uuid NOT NULL REFERENCES ai_runs(id) ON DELETE CASCADE,level varchar(50) NOT NULL,stage varchar(50) NOT NULL,message text NOT NULL,created_at timestamptz DEFAULT now() NOT NULL);'+
-    'CREATE TABLE IF NOT EXISTS approvals (id uuid PRIMARY KEY,step_id uuid NOT NULL REFERENCES ai_run_steps(id) ON DELETE CASCADE,decision varchar(50) NOT NULL,actor varchar(255) NOT NULL,created_at timestamptz DEFAULT now() NOT NULL);'+
-    'CREATE TABLE IF NOT EXISTS test_runs (id uuid PRIMARY KEY,project_id uuid NOT NULL REFERENCES projects(id) ON DELETE CASCADE,snapshot_id uuid REFERENCES source_snapshots(id),status varchar(50) NOT NULL,created_at timestamptz DEFAULT now() NOT NULL);'+
-    'CREATE TABLE IF NOT EXISTS test_results (id uuid PRIMARY KEY,test_run_id uuid NOT NULL REFERENCES test_runs(id) ON DELETE CASCADE,name varchar(255) NOT NULL,suite varchar(50) NOT NULL,status varchar(50) NOT NULL,duration_ms integer NOT NULL,detail text);'+
-    'CREATE TABLE IF NOT EXISTS deployments (id uuid PRIMARY KEY,project_id uuid NOT NULL REFERENCES projects(id) ON DELETE CASCADE,env varchar(50) NOT NULL,status varchar(50) NOT NULL,commit_sha varchar(255),url varchar(255) NOT NULL,adapter varchar(100) NOT NULL,created_at timestamptz DEFAULT now() NOT NULL);'+
-    'CREATE TABLE IF NOT EXISTS audit_events (id uuid PRIMARY KEY,project_id uuid NOT NULL REFERENCES projects(id) ON DELETE CASCADE,actor varchar(50) NOT NULL,actor_name varchar(255) NOT NULL,action varchar(255) NOT NULL,target varchar(255) NOT NULL,risk varchar(50) NOT NULL,approved boolean,diff_summary text,stage varchar(50),created_at timestamptz DEFAULT now() NOT NULL);'
-  );
-}
-
 async function seedRecoveredContext(pool, projectId) {
-  const count = await pool.query("select count(*)::int as count from project_context_entries where project_id=$1",[projectId]);
-  if (count.rows[0].count > 0) return;
-  const entries = [
-    ["milestone","ForgeOS named and product thesis locked","ForgeOS was selected as the independent Universal AI Software Factory. Core flow: natural language idea → durable Project Brain → requirements/plan → approval gates → generated source → preview → tests/repair → deployment, with auditable history.","recovered-project-context","2026-09-20T00:00:00Z"],
-    ["architecture","GitHub as canonical source of truth","The project uses a toolbox architecture and avoids permanent dependence on any single builder. GitHub is the canonical source; builders and services are resources around it.","recovered-project-context","2026-09-20T12:00:00Z"],
-    ["architecture","Control plane and worker separation","The control plane owns runs, approvals, state transitions, snapshots, audit and deployment reconciliation. The Railway worker performs bounded installation/build/execution, cancellation/timeouts and reports observations.","recovered-project-context","2026-09-21T18:18:16Z"],
-    ["decision","Execution lifecycle locked","Lifecycle: DRAFT → PLANNING → AWAITING_APPROVAL → EXECUTING → TESTING → REVIEW → DEPLOYING → COMPLETED; failure enters REPAIRING and cancellation enters CANCELLED.","recovered-project-context","2026-09-21T18:29:42Z"],
-    ["decision","Provider-agnostic AI","ForgeOS should route AI work through provider adapters rather than hard-code one AI vendor. Generation, review and repair remain separable task classes.","recovered-project-context","2026-09-21T18:00:00Z"],
-    ["constraint","Human approval for high-risk actions","Destructive or high-risk source, data, credential, infrastructure and production actions require explicit human approval and an auditable decision.","recovered-project-context","2026-09-20T12:30:00Z"],
-    ["milestone","Railway execution foundation live","The canonical repository has a Railway web service and private execution worker. Real source build execution and persistence are implemented; simulated results must never be represented as real execution.","recovered-project-context","2026-09-22T00:00:00Z"],
-    ["decision","Consolidation direction","AppDeploy is the feature reference, Lovable is the product/UI reference, Hatchable is an architecture reference, while GitHub + Railway + Neon form the engineering foundation. Duplicate ForgeOS projects and unnecessary builder usage are avoided.","recovered-project-context","2026-09-21T23:00:00Z"]
-  ];
-  for (const [kind,title,content,source,occurredAt] of entries) {
-    await pool.query("insert into project_context_entries(id,project_id,kind,title,content,source,occurred_at) values($1,$2,$3,$4,$5,$6,$7)",[randomUUID(),projectId,kind,title,content,source,occurredAt]);
-  }
-}
-
-async function ensureProject(pool, slug, prompt) {
-  const id=randomUUID();
-  const name=slug==="forgeos"?"ForgeOS":slug.replace(/[-_]+/g," ").replace(/\b\w/g,(m)=>m.toUpperCase());
-  const r=await pool.query(
-    "INSERT INTO projects(id,slug,name,tagline,description,status,health,owner,stack,benchmark) VALUES($1,$2,$3,$4,$5,'building','healthy','forgeos',$6::jsonb,false) ON CONFLICT(slug) DO UPDATE SET updated_at=now() RETURNING id",
-    [id,slug,name,"AI software factory","Project managed by ForgeOS. Initial requirement: "+String(prompt).slice(0,1000),JSON.stringify(["React","TypeScript","Vite"])]
-  );
-  const projectId = r.rows[0].id;
-  await seedRecoveredContext(pool, projectId);
-  return projectId;
-}
-
-export async function createProject(pool, { slug, name, prompt }) {
-  if (!pool) throw new Error("worker_database_not_configured");
-  const safeSlug = String(slug || "").trim().toLowerCase();
-  if (!/^[a-z0-9][a-z0-9-]{0,62}$/.test(safeSlug)) throw new Error("unsafe_project_slug");
-  const projectName = String(name || "").trim().slice(0, 255) || safeSlug;
-  const requirement = String(prompt || "").trim().slice(0, 4000);
-  if (requirement.length < 20) throw new Error("project_prompt_too_short");
-  const id = randomUUID();
-  const result = await pool.query(
-    "INSERT INTO projects(id,slug,name,tagline,description,status,health,owner,stack,benchmark) VALUES($1,$2,$3,$4,$5,'drafting','healthy','forgeos',$6::jsonb,false) ON CONFLICT(slug) DO UPDATE SET name=EXCLUDED.name,description=EXCLUDED.description,updated_at=now() RETURNING id",
-    [id, safeSlug, projectName, "New ForgeOS project", "Project created from a natural-language requirement.", JSON.stringify(["React", "TypeScript", "Vite"])]
-  );
-  const projectId = result.rows[0].id;
-  await seedRecoveredContext(pool, projectId);
-  await pool.query("INSERT INTO project_context_entries(id,project_id,kind,title,content,source,occurred_at) VALUES($1,$2,'requirement',$3,$4,'user',now())", [randomUUID(), projectId, "Initial project requirement", requirement]);
-  await pool.query("INSERT INTO project_brain_versions(id,project_id,version,vision,requirements,decisions,architecture,\"schema\",integrations) VALUES($1,$2,1,$3,$4::jsonb,'[]'::jsonb,'[]'::jsonb,'[]'::jsonb,'[]'::jsonb) ON CONFLICT DO NOTHING", [randomUUID(), projectId, requirement.slice(0, 500), JSON.stringify([{id: randomUUID(), title: "Initial requirement", detail: requirement, kind: "functional", priority: "must", status: "draft"}])]);
-  return readProject(pool, safeSlug);
+  const requirement=(await pool.query("SELECT content FROM project_context_entries WHERE project_id=$1 AND kind='requirement' ORDER BY occurred_at LIMIT 1",[projectId])).rows[0]?.content;
+  if(requirement) return;
+  const p=(await pool.query("SELECT description FROM projects WHERE id=$1",[projectId])).rows[0];
+  if(!p) return;
+  const req=p.description||"ForgeOS project";
+  await pool.query("INSERT INTO project_context_entries(id,project_id,kind,title,content,source,occurred_at) VALUES($1,$2,'requirement',$3,$4,'user',now())", [randomUUID(), projectId, "Initial project requirement", req]);
+  await pool.query("INSERT INTO project_brain_versions(id,project_id,version,vision,requirements,decisions,architecture,\"schema\",integrations) VALUES($1,$2,1,$3,$4::jsonb,'[]'::jsonb,'[]'::jsonb,'[]'::jsonb,'[]'::jsonb) ON CONFLICT DO NOTHING", [randomUUID(), projectId, req.slice(0, 500), JSON.stringify([{id: randomUUID(), title: "Initial requirement", detail: req, kind: "functional", priority: "must", status: "draft"}])]);
 }
 
 async function recordPlan(pool,runId) {
@@ -289,14 +231,9 @@ async function recordBuild(pool,{runId,projectSlug,prompt,artifacts,result,gener
   const brainVersion=Number(previousBrain?.version||0)+1;
   const brainVersionId=randomUUID();
   const requirements=Array.isArray(previousBrain?.requirements)?[...previousBrain.requirements,{id:randomUUID(),title:"Builder requirement",detail:prompt,kind:"functional",priority:"must",status:"draft"}]:[{id:randomUUID(),title:"Builder requirement",detail:prompt,kind:"functional",priority:"must",status:"draft"}];
-  await pool.query(
-    "INSERT INTO project_brain_versions(id,project_id,version,vision,requirements,decisions,architecture,\"schema\",integrations) VALUES($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7::jsonb,$8::jsonb,$9::jsonb)",
-    [brainVersionId,projectId,brainVersion,previousBrain?.vision||"Build complete real software from natural language.",JSON.stringify(requirements),JSON.stringify(previousBrain?.decisions||[]),JSON.stringify(previousBrain?.architecture||[{layer:"frontend",choice:"React + TypeScript",note:"canonical ForgeOS studio"},{layer:"execution",choice:"provider adapters",note:"replaceable execution infrastructure"}]),JSON.stringify(previousBrain?.schema||[]),JSON.stringify(previousBrain?.integrations||[])]
-  );
+  await pool.query("INSERT INTO project_brain_versions(id,project_id,version,vision,requirements,decisions,architecture,\"schema\",integrations) VALUES($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7::jsonb,$8::jsonb,$9::jsonb)",[brainVersionId,projectId,brainVersion,previousBrain?.vision||"Build complete real software from natural language.",JSON.stringify(requirements),JSON.stringify(previousBrain?.decisions||[]),JSON.stringify(previousBrain?.architecture||[{layer:"frontend",choice:"React + TypeScript",note:"canonical ForgeOS studio"},{layer:"execution",choice:"provider adapters",note:"replaceable execution infrastructure"}]),JSON.stringify(previousBrain?.schema||[]),JSON.stringify(previousBrain?.integrations||[])]);
   await pool.query("INSERT INTO project_memory_entries(id,project_id,kind,title,content,author_type,source,provenance_run_id,provenance_brain_version_id) VALUES($1,$2,'milestone',$3,$4,'system','brain-projection',$5,$6)",[randomUUID(),projectId,"Project Brain version "+brainVersion,"Brain projection updated from the latest Builder requirement.",runId,brainVersionId]);
-  for(const attempt of (generation.providerAttempts||[])){
-    await pool.query("INSERT INTO provider_attempts(id,project_id,run_id,kind,provider,capability,status,simulated,error,completed_at) VALUES($1,$2,$3,'generation',$4,'ai',$5,false,$6,now())",[randomUUID(),projectId,runId,attempt.provider,attempt.status==="succeeded"?"succeeded":"failed",attempt.error||null]);
-  }
+  for(const attempt of (generation.providerAttempts||[])) await pool.query("INSERT INTO provider_attempts(id,project_id,run_id,kind,provider,capability,status,simulated,error,completed_at) VALUES($1,$2,$3,'generation',$4,'ai',$5,false,$6,now())",[randomUUID(),projectId,runId,attempt.provider,attempt.status==="succeeded"?"succeeded":"failed",attempt.error||null]);
   const providerAttemptId=randomUUID();
   const executionProvider=result.provider || result.providerSelection?.selected || generation.provider || "http-executor";
   await pool.query("INSERT INTO provider_attempts(id,project_id,run_id,kind,provider,capability,status,simulated) VALUES($1,$2,$3,'execution',$4,'source-build','running',false)",[providerAttemptId,projectId,runId,executionProvider]);
@@ -313,17 +250,8 @@ async function recordBuild(pool,{runId,projectSlug,prompt,artifacts,result,gener
   await pool.query("INSERT INTO ai_events(id,run_id,level,stage,message) VALUES($1,$2,$3,'test',$4)",[randomUUID(),runId,passed?"info":"error",passed?"Real build verification passed.":"Real build verification failed during "+result.phase+"."]);
   await pool.query("INSERT INTO audit_events(id,project_id,actor,actor_name,action,target,risk,approved,diff_summary,stage) VALUES($1,$2,'system','ForgeOS',$3,$4,'low',NULL,$5,'test')",[randomUUID(),projectId,passed?"real_build_passed":"real_build_failed",runId,result.error||result.phase]);
   await transitionRun(pool,runId,passed?"review":"repairing",{eventStage:"test",message:passed?"Real build verification passed; run is ready for review.":"Real build verification failed; run entered bounded repair."});
-  await pool.query("UPDATE provider_attempts SET status=$1,completed_at=now(),job_id=$2,error=$3,observations=$4::jsonb WHERE id=$5",[
-    passed ? "succeeded" : "failed",
-    result.jobId || null,
-    result.error || result.build?.error || result.install?.error || null,
-    JSON.stringify({phase:result.phase || null, state:result.state || null, generationMode:generation.mode, provider:generation.provider, model:generation.model,providerAttempts:result.providerAttempts||[]}),
-    providerAttemptId
-  ]);
-  for(const attempt of (result.providerAttempts||[])){
-    if(attempt.provider===executionProvider) continue;
-    await pool.query("INSERT INTO provider_attempts(id,project_id,run_id,kind,provider,capability,status,simulated,error,completed_at) VALUES($1,$2,$3,'execution',$4,'source-build',$5,false,$6,now())",[randomUUID(),projectId,runId,attempt.provider,attempt.status==="succeeded"?"succeeded":"failed",attempt.error||null]);
-  }
+  await pool.query("UPDATE provider_attempts SET status=$1,completed_at=now(),job_id=$2,error=$3,observations=$4::jsonb WHERE id=$5",[passed?"succeeded":"failed",result.jobId||null,result.error||result.build?.error||result.install?.error||null,JSON.stringify({phase:result.phase||null,state:result.state||null,generationMode:generation.mode,provider:generation.provider,model:generation.model,providerAttempts:result.providerAttempts||[]}),providerAttemptId]);
+  for(const attempt of (result.providerAttempts||[])) if(attempt.provider!==executionProvider) await pool.query("INSERT INTO provider_attempts(id,project_id,run_id,kind,provider,capability,status,simulated,error,completed_at) VALUES($1,$2,$3,'execution',$4,'source-build',$5,false,$6,now())",[randomUUID(),projectId,runId,attempt.provider,attempt.status==="succeeded"?"succeeded":"failed",attempt.error||null]);
   await pool.query("UPDATE conversations SET updated_at=now() WHERE id=$1",[conversationId]);
   return {projectId,snapshotId};
 }
@@ -352,10 +280,8 @@ async function persistRepair(pool,{runId,prompt,files,failure,result,generation,
   const projectId=project.rows[0].id;
   const snapshotId=randomUUID();
   await pool.query("insert into source_snapshots(id,project_id,run_id,message) values($1,$2,$3,$4)",[snapshotId,projectId,runId,"AI repair source for run "+runId]);
-  for(const file of generation.artifacts){
-    await pool.query("insert into source_files(id,snapshot_id,path,kind,language,loc,status,content) values($1,$2,$3,'file',$4,$5,'generated',$6)",[randomUUID(),snapshotId,file.path,file.language||"text",String(file.content||"").split("\n").length,file.content]);
-  }
-  const passed=result.state==="passed" && result.simulated===false;
+  for(const file of generation.artifacts) await pool.query("insert into source_files(id,snapshot_id,path,kind,language,loc,status,content) values($1,$2,$3,'file',$4,$5,'generated',$6)",[randomUUID(),snapshotId,file.path,file.language||"text",String(file.content||"").split("\n").length,file.content]);
+  const passed=result.state==="passed"&&result.simulated===false;
   const testRunId=randomUUID();
   await pool.query("insert into test_runs(id,project_id,run_id,snapshot_id,status) values($1,$2,$3,$4,$5)",[testRunId,projectId,runId,snapshotId,passed?"passed":"failed"]);
   await pool.query("insert into test_results(id,test_run_id,name,suite,status,duration_ms,detail) values($1,$2,'AI repair build','repair',$3,$4,$5)",[randomUUID(),testRunId,passed?"passed":"failed",Number(result?.build?.durationMs||result?.install?.durationMs||0),JSON.stringify({failure,phase:result.phase,state:result.state})]);
@@ -365,19 +291,20 @@ async function persistRepair(pool,{runId,prompt,files,failure,result,generation,
   return {projectId,snapshotId,testRunId};
 }
 
-export async function autoRepairAndBuild({pool=null,runId,projectSlug="forgeos",prompt,files,failure,execute,maxAttempts=2}) {
+export async function autoRepairAndBuild({pool=null,runId,projectSlug="forgeos",prompt,files,failure,execute,maxAttempts=2,signal=null}) {
   let currentFiles=Array.isArray(files)?files:[];
   let currentFailure=String(failure||"real build failed");
   const attempts=Math.max(0,Math.min(2,Number(maxAttempts)||2));
   const history=[];
   for(let attempt=1;attempt<=attempts;attempt++){
+    if(signal?.aborted) return {state:"cancelled",simulated:false,repairAttempts:history};
     if(pool){
       const state=(await pool.query("SELECT status FROM ai_runs WHERE id=$1",[runId])).rows[0]?.status;
       if(state==="cancelled") return {state:"cancelled",simulated:false,repairAttempts:history};
       await pool.query("INSERT INTO ai_events(id,run_id,level,stage,message) VALUES($1,$2,'info','repair',$3)",[randomUUID(),runId,"Automatic repair attempt "+attempt+" of "+attempts+" started."]);
     }
     try{
-      const result=await repairAndBuild({pool,runId,projectSlug,prompt,files:currentFiles,failure:currentFailure,execute});
+      const result=await repairAndBuild({pool,runId,projectSlug,prompt,files:currentFiles,failure:currentFailure,execute,signal});
       history.push({attempt,state:result.state,provider:result.provider||null,error:result.state==="passed"?null:(result.error||"repair_failed")});
       if(result.state==="passed") return {...result,repairAttempts:history};
       currentFiles=result.sourceFiles?.length?result.sourceFiles:currentFiles;
@@ -388,20 +315,22 @@ export async function autoRepairAndBuild({pool=null,runId,projectSlug="forgeos",
       if(pool) await pool.query("INSERT INTO ai_events(id,run_id,level,stage,message) VALUES($1,$2,'warn','repair',$3)",[randomUUID(),runId,"Automatic repair attempt "+attempt+" failed: "+currentFailure.slice(0,1500)]);
     }
   }
-  if(pool){
+  if(pool && !signal?.aborted){
     await transitionRun(pool,runId,"failed",{eventStage:"repair",message:"Automatic repair attempts exhausted.",level:"error"}).catch(()=>{});
     await pool.query("INSERT INTO ai_events(id,run_id,level,stage,message) VALUES($1,$2,'error','repair',$3)",[randomUUID(),runId,"Automatic repair exhausted after "+attempts+" bounded attempt(s)."]);
   }
-  return {state:"failed",simulated:false,repairAttempts:history,error:currentFailure};
+  return {state:signal?.aborted?"cancelled":"failed",simulated:false,repairAttempts:history,error:signal?.aborted?"run_cancelled":currentFailure};
 }
 
-export async function repairAndBuild({pool=null,runId,projectSlug="forgeos",prompt,files,failure,execute}) {
+export async function repairAndBuild({pool=null,runId,projectSlug="forgeos",prompt,files,failure,execute,signal=null}) {
+  if(signal?.aborted) return {state:"cancelled",simulated:false};
   const selected = await selectProvider(aiProviders, preferredAIProvider);
   let generated=null;
   let selectedProvider=null;
   const repairProjectId = pool ? (await pool.query("SELECT project_id FROM ai_runs WHERE id=$1 LIMIT 1",[runId])).rows[0]?.project_id : null;
   const providerAttempts=[];
   for (const candidate of selected.candidates || [{provider:selected.provider,health:selected.health}]) {
+    if(signal?.aborted) return {state:"cancelled",simulated:false,providerAttempts};
     const provider=candidate.provider;
     if (typeof provider.repair !== "function") {
       providerAttempts.push({provider:provider.id,status:"skipped",error:"provider_cannot_repair"});
@@ -411,6 +340,7 @@ export async function repairAndBuild({pool=null,runId,projectSlug="forgeos",prom
     if(pool) await pool.query("INSERT INTO provider_attempts(id,project_id,run_id,kind,provider,capability,status,priority,simulated) VALUES($1,$2,$3,'repair',$4,'ai','running',$5,false)",[attemptId,repairProjectId,runId,provider.id,candidate.health?.priority||0]).catch(()=>{});
     try {
       generated=await provider.repair({prompt,files,failure});
+      if(signal?.aborted) return {state:"cancelled",simulated:false,providerAttempts};
       selectedProvider=provider;
       providerAttempts.push({provider:provider.id,status:"succeeded"});
       if(pool) await pool.query("UPDATE provider_attempts SET status='succeeded',completed_at=now(),observations=$1::jsonb WHERE id=$2",[JSON.stringify({model:generated.model,mode:generated.mode}),attemptId]).catch(()=>{});
@@ -421,13 +351,13 @@ export async function repairAndBuild({pool=null,runId,projectSlug="forgeos",prom
       if(pool) await pool.query("UPDATE provider_attempts SET status='failed',completed_at=now(),error=$1 WHERE id=$2",[message,attemptId]).catch(()=>{});
     }
   }
+  if(signal?.aborted) return {state:"cancelled",simulated:false,providerAttempts};
   if(!generated || !selectedProvider) throw new Error("all_ai_repair_providers_failed:"+providerAttempts.map((a)=>a.provider+":"+a.error).join(";"));
   const artifacts = validateArtifacts(generated.artifacts);
-  const result = await execute(runId,artifacts);
+  const result = await execute(runId,artifacts,{signal});
+  if(signal?.aborted) return {state:"cancelled",simulated:false,providerAttempts};
   const persistence=await persistRepair(pool,{runId,prompt,files,failure,result,generation:{...generated,artifacts},projectSlug});
-  return {...result,repairSimulated:false,generationMode:"ai-repair",provider:generated.provider || selectedProvider.id,model:generated.model,sourceFiles:artifacts,
-    projectId:persistence?.projectId||null,snapshotId:persistence?.snapshotId||null,testRunId:persistence?.testRunId||null,
-    providerSelection:{selected:selectedProvider.id,preferred:preferredAIProvider,failover:selectedProvider.id!==preferredAIProvider},providerAttempts};
+  return {...result,repairSimulated:false,generationMode:"ai-repair",provider:generated.provider || selectedProvider.id,model:generated.model,sourceFiles:artifacts,projectId:persistence?.projectId||null,snapshotId:persistence?.snapshotId||null,testRunId:persistence?.testRunId||null,providerSelection:{selected:selectedProvider.id,preferred:preferredAIProvider,failover:selectedProvider.id!==preferredAIProvider},providerAttempts};
 }
 
 export async function latestSource(pool, projectSlug, runId=null) {
