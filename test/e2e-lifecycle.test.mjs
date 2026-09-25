@@ -14,6 +14,7 @@ import { transitionRun } from "../worker/run-state.mjs";
 
 const databaseUrl = process.env.DATABASE_URL || "postgresql://postgres:postgres@127.0.0.1:5432/postgres";
 const vercelToken = process.env.VERCEL_TOKEN || "";
+const vercelProject = (process.env.FORGEOS_E2E_VERCEL_PROJECT || "forgeos-universal-ai-factory").toLowerCase();
 if (!vercelToken) throw new Error("VERCEL_TOKEN is required for the real deployment lifecycle E2E");
 const pool = new Pool({ connectionString: databaseUrl, max: 2 });
 function assertEqual(actual, expected, label) { assert.equal(actual, expected, label); }
@@ -45,7 +46,10 @@ try {
   assert.equal(evidence.rows[0].snapshot_id, result.snapshotId);
   assert.equal(evidence.rows[0].test_status, "passed");
 
-  const preview = await deployVercel({ token: vercelToken, projectName: ("forgeos-" + slug + "-preview").toLowerCase(), files: result.sourceFiles, environment: "preview" });
+  // The E2E token is intentionally tested against the already-provisioned ForgeOS
+  // Vercel project. Creating arbitrary new Vercel projects is a separate provider
+  // permission and should not make the lifecycle contract fail in CI.
+  const preview = await deployVercel({ token: vercelToken, projectName: vercelProject, files: result.sourceFiles, environment: "preview" });
   assertEqual(preview.simulated, false, "preview deployment must be real");
   assert.ok(preview.deploymentId, "preview deployment id must exist");
   let previewStatus = preview;
@@ -64,7 +68,7 @@ try {
   assertEqual(deployApproved.state, "review", "production approval must preserve review state until deployment starts");
   await transitionRun(pool, runId, "deploying", { eventStage: "deploy", message: "E2E real deployment adapter started." });
 
-  const production = await deployVercel({ token: vercelToken, projectName: ("forgeos-" + slug + "-production").toLowerCase(), files: result.sourceFiles, environment: "production" });
+  const production = await deployVercel({ token: vercelToken, projectName: vercelProject, files: result.sourceFiles, environment: "production" });
   assertEqual(production.simulated, false, "production deployment must be real");
   assert.ok(production.deploymentId, "production deployment id must exist");
   let productionStatus = production;
