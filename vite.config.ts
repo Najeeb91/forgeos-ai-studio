@@ -1,6 +1,5 @@
-// @lovable.dev/vite-tanstack-config provides the TanStack Start/Vite integration.
-// ForgeOS is deployed as a normal Node server on Railway, so pin Nitro to
-// the portable Node target instead of the wrapper's Cloudflare default.
+// ForgeOS uses the Lovable TanStack Start wrapper for its shared Vite setup.
+// For Vercel, Nitro must target Vercel rather than the Node server preset.
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
 export default defineConfig({
@@ -8,6 +7,6 @@ export default defineConfig({
     server: { entry: "server" },
   },
   nitro: {
-    preset: "node-server",
+    preset: "vercel",
   },
 });
