@@ -35,5 +35,6 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
           FORGEOS_AI_PROVIDER: openai-compatible
           FORGEOS_BUILD_PROVIDER: local-process
+          FORGEOS_E2E_VERCEL_PROJECT: forgeos-universal-ai-factory
           VERCEL_TOKEN: ${{ secrets.FORGEOS_VERCEL_TOKEN }}
         run: node test/e2e-lifecycle.test.mjs
