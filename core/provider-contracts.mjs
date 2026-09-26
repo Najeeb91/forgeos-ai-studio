@@ -25,24 +25,42 @@ export class ForgeOSProvider {
 }
 
 export class AuthProvider extends ForgeOSProvider {
-  constructor(options) { super({ ...options, capability: ProviderCapability.AUTH }); }
-  async authenticate() { throw new Error("auth_provider_not_implemented"); }
+  constructor(options) {
+    super({ ...options, capability: ProviderCapability.AUTH });
+  }
+  async authenticate() {
+    throw new Error("auth_provider_not_implemented");
+  }
 }
 
 export class BuildProvider extends ForgeOSProvider {
-  constructor(options) { super({ ...options, capability: ProviderCapability.BUILD }); }
-  async build() { throw new Error("build_provider_not_implemented"); }
+  constructor(options) {
+    super({ ...options, capability: ProviderCapability.BUILD });
+  }
+  async build() {
+    throw new Error("build_provider_not_implemented");
+  }
 }
 
 export class DeployProvider extends ForgeOSProvider {
-  constructor(options) { super({ ...options, capability: ProviderCapability.DEPLOY }); }
-  async deploy() { throw new Error("deploy_provider_not_implemented"); }
+  constructor(options) {
+    super({ ...options, capability: ProviderCapability.DEPLOY });
+  }
+  async deploy() {
+    throw new Error("deploy_provider_not_implemented");
+  }
 }
 
 export class AIProvider extends ForgeOSProvider {
-  constructor(options) { super({ ...options, capability: ProviderCapability.AI }); }
-  async generate() { throw new Error("ai_provider_not_implemented"); }
-  async repair() { throw new Error("ai_repair_not_implemented"); }
+  constructor(options) {
+    super({ ...options, capability: ProviderCapability.AI });
+  }
+  async generate() {
+    throw new Error("ai_provider_not_implemented");
+  }
+  async repair() {
+    throw new Error("ai_repair_not_implemented");
+  }
 }
 
 export function providerRegistry(providers = []) {
@@ -52,7 +70,11 @@ export function providerRegistry(providers = []) {
     map.set(provider.capability + ":" + provider.id, provider);
   }
   return {
-    get(capability, id) { return map.get(capability + ":" + id) || null; },
-    list() { return [...map.values()]; },
+    get(capability, id) {
+      return map.get(capability + ":" + id) || null;
+    },
+    list() {
+      return [...map.values()];
+    },
   };
 }

@@ -14,8 +14,10 @@ function validateFiles(files) {
   if (!Array.isArray(files) || files.length === 0) throw new Error("files_required");
   let total = 0;
   for (const file of files) {
-    if (!file || typeof file.path !== "string" || typeof file.content !== "string") throw new Error("invalid_file");
-    if (file.path.startsWith("/") || file.path.includes("..") || file.path.includes("\\")) throw new Error("unsafe_path");
+    if (!file || typeof file.path !== "string" || typeof file.content !== "string")
+      throw new Error("invalid_file");
+    if (file.path.startsWith("/") || file.path.includes("..") || file.path.includes("\\"))
+      throw new Error("unsafe_path");
     const bytes = Buffer.byteLength(file.content);
     if (bytes > MAX_FILE_BYTES) throw new Error("file_too_large");
     total += bytes;
@@ -25,19 +27,25 @@ function validateFiles(files) {
 
 function exec(command, args, cwd, extraEnv = {}, signal = undefined) {
   return new Promise((resolveRun) => {
-    execFile(command, args, {
-      cwd,
-      timeout: MAX_DURATION_MS,
-      maxBuffer: MAX_OUTPUT_BYTES,
-      env: { PATH: process.env.PATH, HOME: cwd, NODE_ENV: "production", CI: "1", ...extraEnv },
-      signal,
-    }, (error, stdout, stderr) => resolveRun({
-      ok: !error,
-      code: typeof error?.code === "number" ? error.code : error ? null : 0,
-      stdout: String(stdout || "").slice(-MAX_OUTPUT_BYTES),
-      stderr: String(stderr || "").slice(-MAX_OUTPUT_BYTES),
-      error: error?.message || null,
-    }));
+    execFile(
+      command,
+      args,
+      {
+        cwd,
+        timeout: MAX_DURATION_MS,
+        maxBuffer: MAX_OUTPUT_BYTES,
+        env: { PATH: process.env.PATH, HOME: cwd, NODE_ENV: "production", CI: "1", ...extraEnv },
+        signal,
+      },
+      (error, stdout, stderr) =>
+        resolveRun({
+          ok: !error,
+          code: typeof error?.code === "number" ? error.code : error ? null : 0,
+          stdout: String(stdout || "").slice(-MAX_OUTPUT_BYTES),
+          stderr: String(stderr || "").slice(-MAX_OUTPUT_BYTES),
+          error: error?.message || null,
+        }),
+    );
   });
 }
 
@@ -54,17 +62,28 @@ function validatePackage(files) {
   const packageFile = files.find((f) => f.path === "package.json");
   if (!packageFile) throw new Error("package_json_required");
   let pkg;
-  try { pkg = JSON.parse(packageFile.content); } catch { throw new Error("invalid_package_json"); }
+  try {
+    pkg = JSON.parse(packageFile.content);
+  } catch {
+    throw new Error("invalid_package_json");
+  }
   const scripts = pkg?.scripts || {};
-  if (scripts.preinstall || scripts.postinstall || scripts.prepare) throw new Error("lifecycle_scripts_not_allowed");
+  if (scripts.preinstall || scripts.postinstall || scripts.prepare)
+    throw new Error("lifecycle_scripts_not_allowed");
   const build = typeof scripts.build === "string" ? scripts.build.trim() : "";
-  if (!["vite build", "next build", "tsc --noEmit"].includes(build)) throw new Error("unsupported_build_profile");
+  if (!["vite build", "next build", "tsc --noEmit"].includes(build))
+    throw new Error("unsupported_build_profile");
   return pkg;
 }
 
 export class LocalProcessBuildProvider {
-  constructor() { this.id = "local-process"; this.capability = "build"; }
-  async health() { return { ok: true, provider: this.id, isolated: false, realExecution: true }; }
+  constructor() {
+    this.id = "local-process";
+    this.capability = "build";
+  }
+  async health() {
+    return { ok: true, provider: this.id, isolated: false, realExecution: true };
+  }
   async build(runId, files, options = {}) {
     validateFiles(files);
     validatePackage(files);
@@ -72,23 +91,75 @@ export class LocalProcessBuildProvider {
     const root = await mkdtemp(join(tmpdir(), "forgeos-job-"));
     try {
       await writeWorkspace(files, root);
-      const install = await exec("npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund"], root, { NODE_ENV: "development" }, options.signal);
-      if (!install.ok) return { jobId, runId, state:"failed", phase:"install", simulated:false, provider:this.id, install };
+      const install = await exec(
+        "npm",
+        ["install", "--ignore-scripts", "--no-audit", "--no-fund"],
+        root,
+        { NODE_ENV: "development" },
+        options.signal,
+      );
+      if (!install.ok)
+        return {
+          jobId,
+          runId,
+          state: "failed",
+          phase: "install",
+          simulated: false,
+          provider: this.id,
+          install,
+        };
       const built = await exec("npm", ["run", "build"], root, {}, options.signal);
-      const artifact = await stat(join(root, "dist")).then(() => ({type:"directory",path:"dist"})).catch(() => null);
-      return { jobId, runId, state:built.ok ? "passed" : "failed", phase:"build", simulated:false, provider:this.id, artifact, build:built,
-        policy:{workspaceOnly:true, commandAllowlist:["npm install --ignore-scripts --no-audit --no-fund","npm run build"], maxDurationMs:MAX_DURATION_MS, maxOutputBytes:MAX_OUTPUT_BYTES, network:"dependency-install-only"} };
-    } finally { await rm(root, {recursive:true,force:true}); }
+      const artifact = await stat(join(root, "dist"))
+        .then(() => ({ type: "directory", path: "dist" }))
+        .catch(() => null);
+      return {
+        jobId,
+        runId,
+        state: built.ok ? "passed" : "failed",
+        phase: "build",
+        simulated: false,
+        provider: this.id,
+        artifact,
+        build: built,
+        policy: {
+          workspaceOnly: true,
+          commandAllowlist: ["npm install --ignore-scripts --no-audit --no-fund", "npm run build"],
+          maxDurationMs: MAX_DURATION_MS,
+          maxOutputBytes: MAX_OUTPUT_BYTES,
+          network: "dependency-install-only",
+        },
+      };
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   }
 }
 
 export class DockerBuildProvider {
-  constructor() { this.id = "docker"; this.capability = "build"; }
+  constructor() {
+    this.id = "docker";
+    this.capability = "build";
+  }
   async health() {
     const daemon = await exec("docker", ["info"], process.cwd());
-    if (!daemon.ok) return { ok:false, provider:this.id, isolated:true, realExecution:false, error:daemon.error || daemon.stderr };
-    const image = await exec("docker", ["image","inspect",DOCKER_IMAGE], process.cwd());
-    return { ok:image.ok, provider:this.id, isolated:true, realExecution:image.ok, image:DOCKER_IMAGE, imagePresent:image.ok, error:image.ok ? null : "docker_image_missing" };
+    if (!daemon.ok)
+      return {
+        ok: false,
+        provider: this.id,
+        isolated: true,
+        realExecution: false,
+        error: daemon.error || daemon.stderr,
+      };
+    const image = await exec("docker", ["image", "inspect", DOCKER_IMAGE], process.cwd());
+    return {
+      ok: image.ok,
+      provider: this.id,
+      isolated: true,
+      realExecution: image.ok,
+      image: DOCKER_IMAGE,
+      imagePresent: image.ok,
+      error: image.ok ? null : "docker_image_missing",
+    };
   }
   async build(runId, files, options = {}) {
     validateFiles(files);
@@ -100,17 +171,102 @@ export class DockerBuildProvider {
     const volume = "forgeos-deps-" + jobId;
     try {
       await writeWorkspace(files, root);
-      const common = ["run","--rm","--init","--security-opt","no-new-privileges","--cap-drop=ALL","--pids-limit","128","--memory","1g","--cpus","2","--tmpfs","/tmp:rw,nosuid,nodev,noexec,size=256m"];
-      const install = await exec("docker", [...common,"--network","bridge","-v",root+":/workspace:rw","-v",volume+":/workspace/node_modules",DOCKER_IMAGE,"sh","-lc","cd /workspace && npm install --ignore-scripts --no-audit --no-fund"], root, {}, options.signal);
-      if (!install.ok) return { jobId, runId, state:"failed", phase:"install", simulated:false, provider:this.id, install,
-        policy:{isolated:true, network:"dependency-install-only", image:DOCKER_IMAGE} };
-      const built = await exec("docker", [...common,"--network","none","--read-only","-v",root+":/workspace:ro","-v",volume+":/workspace/node_modules",DOCKER_IMAGE,"sh","-lc","cd /workspace && npm run build"], root, {}, options.signal);
-      const artifact = await stat(join(root, "dist")).then(() => ({type:"directory",path:"dist"})).catch(() => null);
-      return { jobId, runId, state:built.ok ? "passed" : "failed", phase:"build", simulated:false, provider:this.id, artifact, build:built,
-        policy:{isolated:true, network:"install-only", image:DOCKER_IMAGE, readOnlyBuildFilesystem:true, noNewPrivileges:true, capDrop:"ALL", pidsLimit:128, memory:"1g", cpus:2, commandAllowlist:["npm install --ignore-scripts --no-audit --no-fund","npm run build"], maxDurationMs:MAX_DURATION_MS, maxOutputBytes:MAX_OUTPUT_BYTES} };
+      const common = [
+        "run",
+        "--rm",
+        "--init",
+        "--security-opt",
+        "no-new-privileges",
+        "--cap-drop=ALL",
+        "--pids-limit",
+        "128",
+        "--memory",
+        "1g",
+        "--cpus",
+        "2",
+        "--tmpfs",
+        "/tmp:rw,nosuid,nodev,noexec,size=256m",
+      ];
+      const install = await exec(
+        "docker",
+        [
+          ...common,
+          "--network",
+          "bridge",
+          "-v",
+          root + ":/workspace:rw",
+          "-v",
+          volume + ":/workspace/node_modules",
+          DOCKER_IMAGE,
+          "sh",
+          "-lc",
+          "cd /workspace && npm install --ignore-scripts --no-audit --no-fund",
+        ],
+        root,
+        {},
+        options.signal,
+      );
+      if (!install.ok)
+        return {
+          jobId,
+          runId,
+          state: "failed",
+          phase: "install",
+          simulated: false,
+          provider: this.id,
+          install,
+          policy: { isolated: true, network: "dependency-install-only", image: DOCKER_IMAGE },
+        };
+      const built = await exec(
+        "docker",
+        [
+          ...common,
+          "--network",
+          "none",
+          "--read-only",
+          "-v",
+          root + ":/workspace:ro",
+          "-v",
+          volume + ":/workspace/node_modules",
+          DOCKER_IMAGE,
+          "sh",
+          "-lc",
+          "cd /workspace && npm run build",
+        ],
+        root,
+        {},
+        options.signal,
+      );
+      const artifact = await stat(join(root, "dist"))
+        .then(() => ({ type: "directory", path: "dist" }))
+        .catch(() => null);
+      return {
+        jobId,
+        runId,
+        state: built.ok ? "passed" : "failed",
+        phase: "build",
+        simulated: false,
+        provider: this.id,
+        artifact,
+        build: built,
+        policy: {
+          isolated: true,
+          network: "install-only",
+          image: DOCKER_IMAGE,
+          readOnlyBuildFilesystem: true,
+          noNewPrivileges: true,
+          capDrop: "ALL",
+          pidsLimit: 128,
+          memory: "1g",
+          cpus: 2,
+          commandAllowlist: ["npm install --ignore-scripts --no-audit --no-fund", "npm run build"],
+          maxDurationMs: MAX_DURATION_MS,
+          maxOutputBytes: MAX_OUTPUT_BYTES,
+        },
+      };
     } finally {
-      await exec("docker", ["volume","rm","-f",volume], root);
-      await rm(root, {recursive:true,force:true});
+      await exec("docker", ["volume", "rm", "-f", volume], root);
+      await rm(root, { recursive: true, force: true });
     }
   }
 }

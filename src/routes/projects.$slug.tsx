@@ -17,8 +17,14 @@ export const Route = createFileRoute("/projects/$slug")({
         name: "description",
         content: loaderData?.project.tagline ?? "A ForgeOS project workspace.",
       },
-      { property: "og:title", content: loaderData ? `${loaderData.project.name} — ForgeOS` : "ForgeOS" },
-      { property: "og:description", content: loaderData?.tagline ?? "A ForgeOS project workspace." },
+      {
+        property: "og:title",
+        content: loaderData ? `${loaderData.project.name} — ForgeOS` : "ForgeOS",
+      },
+      {
+        property: "og:description",
+        content: loaderData?.tagline ?? "A ForgeOS project workspace.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],

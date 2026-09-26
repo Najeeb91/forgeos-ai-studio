@@ -1,18 +1,172 @@
 import { ForgeOSProvider, ProviderCapability } from "../../core/provider-contracts.mjs";
 
-const MAX_FILE_BYTES=1024*1024;
-const MAX_TOTAL_BYTES=10*1024*1024;
-const SAFE_BRANCH=/^forgeos\/[a-z0-9][a-z0-9._-]{0,62}\/run-[0-9a-f]{8,64}$/;
+const MAX_FILE_BYTES = 1024 * 1024;
+const MAX_TOTAL_BYTES = 10 * 1024 * 1024;
+const SAFE_BRANCH = /^forgeos\/[a-z0-9][a-z0-9._-]{0,62}\/run-[0-9a-f]{8,64}$/;
 
 export class GitHubSourceProvider extends ForgeOSProvider {
-  constructor(secretsProvider=null){super({id:"github",capability:ProviderCapability.SOURCE});this.secrets=secretsProvider;this.owner=process.env.FORGEOS_GITHUB_OWNER||"Najeeb91";this.repo=process.env.FORGEOS_GITHUB_REPO||"forgeos-ai-studio";}
-  async token(){const s=this.secrets?await this.secrets.get("GITHUB_TOKEN"):null;return s?.value||process.env.GITHUB_TOKEN||"";}
-  headers(){return {Accept:"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28"};}
-  async health(){const token=await this.token();if(!token)return {ok:false,provider:this.id,capability:this.capability,configured:false,realExecution:false,error:"github_token_missing"};const r=await fetch("https://api.github.com/repos/"+encodeURIComponent(this.owner)+"/"+encodeURIComponent(this.repo),{headers:{...this.headers(),Authorization:"Bearer "+token}});return {ok:r.ok,provider:this.id,capability:this.capability,configured:true,realExecution:r.ok,repository:this.owner+"/"+this.repo,error:r.ok?null:"github_repository_unavailable"};}
-  async getFile(path,ref="main"){const token=await this.token();if(!token)throw new Error("github_token_missing");const r=await fetch("https://api.github.com/repos/"+this.owner+"/"+this.repo+"/contents/"+path+"?ref="+encodeURIComponent(ref),{headers:{...this.headers(),Authorization:"Bearer "+token,Accept:"application/vnd.github.raw+json"}});if(!r.ok)throw new Error("github_source_read_failed_"+r.status);return {path,content:await r.text(),ref};}
-  async ensureBranch(branch,base="main"){if(!SAFE_BRANCH.test(branch))throw new Error("unsafe_source_branch");const token=await this.token();if(!token)throw new Error("github_token_missing");const baseRef=await fetch("https://api.github.com/repos/"+this.owner+"/"+this.repo+"/git/ref/heads/"+encodeURIComponent(base),{headers:{...this.headers(),Authorization:"Bearer "+token}});if(!baseRef.ok)throw new Error("github_base_branch_unavailable");const sha=(await baseRef.json()).object?.sha;const create=await fetch("https://api.github.com/repos/"+this.owner+"/"+this.repo+"/git/refs",{method:"POST",headers:{...this.headers(),Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify({ref:"refs/heads/"+branch,sha})});if(create.ok||create.status===422)return {branch,created:create.ok};const detail=await create.json().catch(()=>({}));throw new Error(detail?.message||"github_branch_create_failed");}
-  async putFile({path,content,message,branch}){const token=await this.token();if(!token)throw new Error("github_token_missing");if(!SAFE_BRANCH.test(branch||""))throw new Error("unsafe_source_branch");if(!path||path.startsWith("/")||path.includes("..")||path.includes("\\")||path.length>240)throw new Error("unsafe_source_path");if(typeof content!=="string"||Buffer.byteLength(content,"utf8")>MAX_FILE_BYTES)throw new Error("source_file_too_large");const api="https://api.github.com/repos/"+this.owner+"/"+this.repo+"/contents/"+path;const existing=await fetch(api+"?ref="+encodeURIComponent(branch),{headers:{...this.headers(),Authorization:"Bearer "+token}});const body=existing.ok?await existing.json():null;const r=await fetch(api,{method:"PUT",headers:{...this.headers(),Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify({message:message||"ForgeOS source update",content:Buffer.from(content).toString("base64"),branch,...(body?.sha?{sha:body.sha}:{})})});const result=await r.json().catch(()=>({}));if(!r.ok)throw new Error(result?.message||"github_source_write_failed");return {provider:this.id,path,branch,commitSha:result?.commit?.sha||null,url:result?.content?.html_url||null};}
-  async pushFiles({files,branch,base="main",message}){if(!Array.isArray(files)||!files.length)throw new Error("source_files_required");const total=files.reduce((n,f)=>n+Buffer.byteLength(String(f.content||""),"utf8"),0);if(total>MAX_TOTAL_BYTES)throw new Error("source_snapshot_too_large");await this.ensureBranch(branch,base);const results=[];for(const file of files)results.push(await this.putFile({path:file.path,content:file.content,branch,message:message||"ForgeOS generated source"}));return {provider:this.id,branch,files:results,totalBytes:total};}
+  constructor(secretsProvider = null) {
+    super({ id: "github", capability: ProviderCapability.SOURCE });
+    this.secrets = secretsProvider;
+    this.owner = process.env.FORGEOS_GITHUB_OWNER || "Najeeb91";
+    this.repo = process.env.FORGEOS_GITHUB_REPO || "forgeos-ai-studio";
+  }
+  async token() {
+    const s = this.secrets ? await this.secrets.get("GITHUB_TOKEN") : null;
+    return s?.value || process.env.GITHUB_TOKEN || "";
+  }
+  headers() {
+    return { Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" };
+  }
+  async health() {
+    const token = await this.token();
+    if (!token)
+      return {
+        ok: false,
+        provider: this.id,
+        capability: this.capability,
+        configured: false,
+        realExecution: false,
+        error: "github_token_missing",
+      };
+    const r = await fetch(
+      "https://api.github.com/repos/" +
+        encodeURIComponent(this.owner) +
+        "/" +
+        encodeURIComponent(this.repo),
+      { headers: { ...this.headers(), Authorization: "Bearer " + token } },
+    );
+    return {
+      ok: r.ok,
+      provider: this.id,
+      capability: this.capability,
+      configured: true,
+      realExecution: r.ok,
+      repository: this.owner + "/" + this.repo,
+      error: r.ok ? null : "github_repository_unavailable",
+    };
+  }
+  async getFile(path, ref = "main") {
+    const token = await this.token();
+    if (!token) throw new Error("github_token_missing");
+    const r = await fetch(
+      "https://api.github.com/repos/" +
+        this.owner +
+        "/" +
+        this.repo +
+        "/contents/" +
+        path +
+        "?ref=" +
+        encodeURIComponent(ref),
+      {
+        headers: {
+          ...this.headers(),
+          Authorization: "Bearer " + token,
+          Accept: "application/vnd.github.raw+json",
+        },
+      },
+    );
+    if (!r.ok) throw new Error("github_source_read_failed_" + r.status);
+    return { path, content: await r.text(), ref };
+  }
+  async ensureBranch(branch, base = "main") {
+    if (!SAFE_BRANCH.test(branch)) throw new Error("unsafe_source_branch");
+    const token = await this.token();
+    if (!token) throw new Error("github_token_missing");
+    const baseRef = await fetch(
+      "https://api.github.com/repos/" +
+        this.owner +
+        "/" +
+        this.repo +
+        "/git/ref/heads/" +
+        encodeURIComponent(base),
+      { headers: { ...this.headers(), Authorization: "Bearer " + token } },
+    );
+    if (!baseRef.ok) throw new Error("github_base_branch_unavailable");
+    const sha = (await baseRef.json()).object?.sha;
+    const create = await fetch(
+      "https://api.github.com/repos/" + this.owner + "/" + this.repo + "/git/refs",
+      {
+        method: "POST",
+        headers: {
+          ...this.headers(),
+          Authorization: "Bearer " + token,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ ref: "refs/heads/" + branch, sha }),
+      },
+    );
+    if (create.ok || create.status === 422) return { branch, created: create.ok };
+    const detail = await create.json().catch(() => ({}));
+    throw new Error(detail?.message || "github_branch_create_failed");
+  }
+  async putFile({ path, content, message, branch }) {
+    const token = await this.token();
+    if (!token) throw new Error("github_token_missing");
+    if (!SAFE_BRANCH.test(branch || "")) throw new Error("unsafe_source_branch");
+    if (
+      !path ||
+      path.startsWith("/") ||
+      path.includes("..") ||
+      path.includes("\\") ||
+      path.length > 240
+    )
+      throw new Error("unsafe_source_path");
+    if (typeof content !== "string" || Buffer.byteLength(content, "utf8") > MAX_FILE_BYTES)
+      throw new Error("source_file_too_large");
+    const api =
+      "https://api.github.com/repos/" + this.owner + "/" + this.repo + "/contents/" + path;
+    const existing = await fetch(api + "?ref=" + encodeURIComponent(branch), {
+      headers: { ...this.headers(), Authorization: "Bearer " + token },
+    });
+    const body = existing.ok ? await existing.json() : null;
+    const r = await fetch(api, {
+      method: "PUT",
+      headers: {
+        ...this.headers(),
+        Authorization: "Bearer " + token,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        message: message || "ForgeOS source update",
+        content: Buffer.from(content).toString("base64"),
+        branch,
+        ...(body?.sha ? { sha: body.sha } : {}),
+      }),
+    });
+    const result = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(result?.message || "github_source_write_failed");
+    return {
+      provider: this.id,
+      path,
+      branch,
+      commitSha: result?.commit?.sha || null,
+      url: result?.content?.html_url || null,
+    };
+  }
+  async pushFiles({ files, branch, base = "main", message }) {
+    if (!Array.isArray(files) || !files.length) throw new Error("source_files_required");
+    const total = files.reduce((n, f) => n + Buffer.byteLength(String(f.content || ""), "utf8"), 0);
+    if (total > MAX_TOTAL_BYTES) throw new Error("source_snapshot_too_large");
+    await this.ensureBranch(branch, base);
+    const results = [];
+    for (const file of files)
+      results.push(
+        await this.putFile({
+          path: file.path,
+          content: file.content,
+          branch,
+          message: message || "ForgeOS generated source",
+        }),
+      );
+    return { provider: this.id, branch, files: results, totalBytes: total };
+  }
 }
-export function createSourceProviders(){return [new GitHubSourceProvider()];}
-export function createSourceProvider(secretsProvider=null){const id=process.env.FORGEOS_SOURCE_PROVIDER||"github";if(id==="github")return new GitHubSourceProvider(secretsProvider);throw new Error("unsupported_source_provider:"+id);}
+export function createSourceProviders() {
+  return [new GitHubSourceProvider()];
+}
+export function createSourceProvider(secretsProvider = null) {
+  const id = process.env.FORGEOS_SOURCE_PROVIDER || "github";
+  if (id === "github") return new GitHubSourceProvider(secretsProvider);
+  throw new Error("unsupported_source_provider:" + id);
+}

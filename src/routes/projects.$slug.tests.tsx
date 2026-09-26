@@ -37,7 +37,8 @@ function Tests() {
   const rows = useMemo(
     () =>
       tests.filter(
-        (test) => (status === "all" || test.status === status) && (suite === "all" || test.suite === suite),
+        (test) =>
+          (status === "all" || test.status === status) && (suite === "all" || test.suite === suite),
       ),
     [status, suite, tests],
   );
@@ -112,7 +113,11 @@ function Tests() {
                   );
                 },
               },
-              { key: "suite", header: "Suite", cell: (test) => <Pill tone="neutral">{test.suite}</Pill> },
+              {
+                key: "suite",
+                header: "Suite",
+                cell: (test) => <Pill tone="neutral">{test.suite}</Pill>,
+              },
               {
                 key: "status",
                 header: "Status",
@@ -138,8 +143,8 @@ function Tests() {
       <Panel title="Execution boundary">
         <p className="text-xs leading-relaxed text-muted-foreground">
           Verified state requires a real runner (sandboxed execution or CI adapter). Until one is
-          attached, every row above is seeded project data, and ForgeOS will not report a test run as
-          passing or failing in reality.
+          attached, every row above is seeded project data, and ForgeOS will not report a test run
+          as passing or failing in reality.
         </p>
       </Panel>
     </PageBody>

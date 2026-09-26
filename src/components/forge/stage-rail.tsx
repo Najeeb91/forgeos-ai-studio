@@ -27,7 +27,9 @@ export function StageRail({ stages, compact }: { stages: Stage[]; compact?: bool
               <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
                 <div
                   className={cn("h-full rounded-full", barTone[tone])}
-                  style={{ width: `${Math.max(stage.progress, stage.status === "locked" ? 0 : 4)}%` }}
+                  style={{
+                    width: `${Math.max(stage.progress, stage.status === "locked" ? 0 : 4)}%`,
+                  }}
                 />
               </div>
               <div className="truncate font-mono text-[10px] text-muted-foreground">

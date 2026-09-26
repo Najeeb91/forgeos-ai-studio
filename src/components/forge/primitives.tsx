@@ -39,7 +39,9 @@ export function StatGrid({
             {stat.label}
           </div>
           <div className="mt-1 font-mono text-xl">{stat.value}</div>
-          {stat.hint ? <div className="mt-1 text-[11px] text-muted-foreground">{stat.hint}</div> : null}
+          {stat.hint ? (
+            <div className="mt-1 text-[11px] text-muted-foreground">{stat.hint}</div>
+          ) : null}
         </div>
       ))}
     </div>
@@ -156,6 +158,7 @@ export function ProvenanceBadge({
 }) {
   const tone = kind === "verified" ? "success" : "warning";
   const text =
-    children ?? (kind === "verified" ? "verified" : kind === "seeded" ? "seeded / demo data" : "not executed");
+    children ??
+    (kind === "verified" ? "verified" : kind === "seeded" ? "seeded / demo data" : "not executed");
   return <Pill tone={tone}>{text}</Pill>;
 }
