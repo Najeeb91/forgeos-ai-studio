@@ -8,7 +8,15 @@ import { createSourceProvider } from "./providers/source-provider.mjs";
 import { createSecretsProvider } from "./providers/secrets-provider.mjs";
 import { createAuthProvider } from "./providers/auth-provider.mjs";
 import { createStorageProvider } from "./providers/storage-provider.mjs";
-import { buildAndPersist, repairAndBuild, autoRepairAndBuild, latestSource, capabilities, readProject, listProjects } from "./forge-core.mjs";
+import {
+  buildAndPersist,
+  repairAndBuild,
+  autoRepairAndBuild,
+  latestSource,
+  capabilities,
+  readProject,
+  listProjects,
+} from "./forge-core.mjs";
 import { runMigrations } from "./migrate.mjs";
 import { prepareBuild, approveBuild, assertApproved, ensureProject } from "./approval-core.mjs";
 import { transitionRun } from "./run-state.mjs";
@@ -68,29 +76,66 @@ async function execute(runId, files, options = {}) {
   const attempts = [];
   for (const provider of ordered) {
     let health;
-    try { health = await provider.health(); }
-    catch (error) { health = {ok:false,provider:provider.id,error:error instanceof Error?error.message:String(error)}; }
-    checks.push({provider,health});
+    try {
+      health = await provider.health();
+    } catch (error) {
+      health = {
+        ok: false,
+        provider: provider.id,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+    checks.push({ provider, health });
     if (options.signal?.aborted) throw new Error("run_cancelled");
-    if (!health?.ok) { attempts.push({provider:provider.id,status:"unavailable",error:health?.error||"provider_unhealthy"}); continue; }
+    if (!health?.ok) {
+      attempts.push({
+        provider: provider.id,
+        status: "unavailable",
+        error: health?.error || "provider_unhealthy",
+      });
+      continue;
+    }
     try {
       const result = await provider.build(runId, files, options);
-      return { ...result, providerSelection:{selected:provider.id,preferred:preferredBuildProvider,failover:provider.id!==preferredBuildProvider}, providerAttempts:[...attempts,{provider:provider.id,status:"succeeded"}] };
+      return {
+        ...result,
+        providerSelection: {
+          selected: provider.id,
+          preferred: preferredBuildProvider,
+          failover: provider.id !== preferredBuildProvider,
+        },
+        providerAttempts: [...attempts, { provider: provider.id, status: "succeeded" }],
+      };
     } catch (error) {
-      const message=error instanceof Error?error.message:String(error);
-      attempts.push({provider:provider.id,status:"failed",error:message});
+      const message = error instanceof Error ? error.message : String(error);
+      attempts.push({ provider: provider.id, status: "failed", error: message });
     }
   }
-  throw new Error("all_build_providers_failed:"+attempts.map((a)=>a.provider+":"+a.error).join(","));
+  throw new Error(
+    "all_build_providers_failed:" + attempts.map((a) => a.provider + ":" + a.error).join(","),
+  );
 }
 
 async function providerHealth() {
   const checks = [];
-  for (const provider of [...buildProviders, ...deployProviders, databaseProvider, storageProvider, sourceProvider, secretsProvider, authProvider]) {
+  for (const provider of [
+    ...buildProviders,
+    ...deployProviders,
+    databaseProvider,
+    storageProvider,
+    sourceProvider,
+    secretsProvider,
+    authProvider,
+  ]) {
     try {
       checks.push(await provider.health());
     } catch (error) {
-      checks.push({ ok:false, provider:provider.id, capability:provider.capability, error:error instanceof Error ? error.message : String(error) });
+      checks.push({
+        ok: false,
+        provider: provider.id,
+        capability: provider.capability,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
   return checks;
@@ -120,15 +165,22 @@ const server = http.createServer(async (req, res) => {
       if (!(await authorized(req))) return json(res, 401, { error: "worker_auth_required" });
       if (!pool) return json(res, 503, { error: "worker_database_not_configured" });
       const payload = await body(req);
-      if (!payload.prompt || typeof payload.prompt !== "string") return json(res, 400, { error: "prompt_required" });
+      if (!payload.prompt || typeof payload.prompt !== "string")
+        return json(res, 400, { error: "prompt_required" });
       const runId = payload.runId || randomUUID();
-      const gate = await prepareBuild(pool, { runId, projectSlug: payload.projectSlug || "forgeos", prompt: payload.prompt });
+      const gate = await prepareBuild(pool, {
+        runId,
+        projectSlug: payload.projectSlug || "forgeos",
+        prompt: payload.prompt,
+      });
       if (gate.state === "awaiting_approval" && payload.approved !== true) {
         return json(res, 200, { ...gate, simulated: false });
       }
       await assertApproved(pool, runId);
-      const currentRun=(await pool.query("SELECT status FROM ai_runs WHERE id=$1",[runId])).rows[0];
-      if(currentRun?.status==="cancelled") return json(res,409,{error:"run_cancelled",simulated:false});
+      const currentRun = (await pool.query("SELECT status FROM ai_runs WHERE id=$1", [runId]))
+        .rows[0];
+      if (currentRun?.status === "cancelled")
+        return json(res, 409, { error: "run_cancelled", simulated: false });
       const controller = new AbortController();
       activeControllers.set(runId, controller);
       let result;
@@ -142,7 +194,7 @@ const server = http.createServer(async (req, res) => {
       } finally {
         activeControllers.delete(runId);
       }
-      if(result.state !== "passed" && process.env.FORGEOS_AI_API_KEY){
+      if (result.state !== "passed" && process.env.FORGEOS_AI_API_KEY) {
         result = await autoRepairAndBuild({
           pool,
           runId,
@@ -154,7 +206,10 @@ const server = http.createServer(async (req, res) => {
           maxAttempts: 2,
         });
       }
-      return json(res, result.state === "passed" ? 200 : 422, { ...result, approvalRequired: false });
+      return json(res, result.state === "passed" ? 200 : 422, {
+        ...result,
+        approvalRequired: false,
+      });
     }
 
     if (req.method === "POST" && req.url === "/worker/deploy") {
@@ -166,73 +221,258 @@ const server = http.createServer(async (req, res) => {
       const environment = payload.environment || "production";
       if (!runId) return json(res, 400, { error: "runId_required" });
 
-      const run = (await pool.query("SELECT ar.id,ar.project_id,ar.status,(SELECT status FROM test_runs WHERE run_id=ar.id ORDER BY created_at DESC LIMIT 1) AS latest_test_status FROM ai_runs ar WHERE ar.id=$1 LIMIT 1",[runId])).rows[0];
+      const run = (
+        await pool.query(
+          "SELECT ar.id,ar.project_id,ar.status,(SELECT status FROM test_runs WHERE run_id=ar.id ORDER BY created_at DESC LIMIT 1) AS latest_test_status FROM ai_runs ar WHERE ar.id=$1 LIMIT 1",
+          [runId],
+        )
+      ).rows[0];
       if (!run) return json(res, 404, { error: "run_not_found" });
       if (run.status !== "review") return json(res, 409, { error: "real_test_review_required" });
-      if (run.latest_test_status !== "passed") return json(res, 409, { error: "real_tests_required" });
-      const exactSnapshot=(await pool.query("SELECT id FROM source_snapshots WHERE run_id=$1 ORDER BY created_at DESC LIMIT 1",[runId])).rows[0];
-      const exactTest=(await pool.query("SELECT id FROM test_runs WHERE run_id=$1 AND status='passed' ORDER BY created_at DESC LIMIT 1",[runId])).rows[0];
-      if(!exactSnapshot || !exactTest) return json(res,409,{error:"exact_run_evidence_required",snapshot:!!exactSnapshot,test:!!exactTest});
-      
+      if (run.latest_test_status !== "passed")
+        return json(res, 409, { error: "real_tests_required" });
+      const exactSnapshot = (
+        await pool.query(
+          "SELECT id FROM source_snapshots WHERE run_id=$1 ORDER BY created_at DESC LIMIT 1",
+          [runId],
+        )
+      ).rows[0];
+      const exactTest = (
+        await pool.query(
+          "SELECT id FROM test_runs WHERE run_id=$1 AND status='passed' ORDER BY created_at DESC LIMIT 1",
+          [runId],
+        )
+      ).rows[0];
+      if (!exactSnapshot || !exactTest)
+        return json(res, 409, {
+          error: "exact_run_evidence_required",
+          snapshot: !!exactSnapshot,
+          test: !!exactTest,
+        });
+
       if (environment === "production") {
-        const approved = (await pool.query("SELECT id FROM approval_requests WHERE run_id=$1 AND action_type='deploy_production' AND status='approved' ORDER BY decided_at DESC LIMIT 1",[runId])).rows[0];
+        const approved = (
+          await pool.query(
+            "SELECT id FROM approval_requests WHERE run_id=$1 AND action_type='deploy_production' AND status='approved' ORDER BY decided_at DESC LIMIT 1",
+            [runId],
+          )
+        ).rows[0];
         if (!approved) {
-          const pending = (await pool.query("SELECT id,target,reason,risk,status FROM approval_requests WHERE run_id=$1 AND action_type='deploy_production' AND status='pending' ORDER BY created_at DESC LIMIT 1",[runId])).rows[0];
-          if (pending) return json(res, 200, { state:"awaiting_approval", simulated:false, approval:pending });
-          const stepId=randomUUID();
-          await pool.query("INSERT INTO ai_run_steps(id,run_id,title,detail,stage,risk,status,order_idx) VALUES($1,$2,'Production deployment approval','Release the verified source snapshot to the production deployment adapter.','deploying','critical','awaiting_approval',999)",[stepId,runId]);
-          const id=randomUUID();
-          await pool.query("INSERT INTO approval_requests(id,project_id,run_id,step_id,action_type,target,reason,risk,status) VALUES($1,$2,$3,$4,'deploy_production',$5,$6,'critical','pending')",[id,run.project_id,runId,stepId,environment,"Release the verified source snapshot to the production deployment adapter."]);
-          await pool.query("INSERT INTO ai_events(id,run_id,level,stage,message) VALUES($1,$2,'approval','deploying','Production deployment is waiting for durable human approval.')",[randomUUID(),runId]);
-          return json(res, 200, { state:"awaiting_approval", simulated:false, approval:{id,step_id:stepId,actionType:"deploy_production",target:environment,reason:"Release verified source to production.",risk:"critical",status:"pending"} });
+          const pending = (
+            await pool.query(
+              "SELECT id,target,reason,risk,status FROM approval_requests WHERE run_id=$1 AND action_type='deploy_production' AND status='pending' ORDER BY created_at DESC LIMIT 1",
+              [runId],
+            )
+          ).rows[0];
+          if (pending)
+            return json(res, 200, {
+              state: "awaiting_approval",
+              simulated: false,
+              approval: pending,
+            });
+          const stepId = randomUUID();
+          await pool.query(
+            "INSERT INTO ai_run_steps(id,run_id,title,detail,stage,risk,status,order_idx) VALUES($1,$2,'Production deployment approval','Release the verified source snapshot to the production deployment adapter.','deploying','critical','awaiting_approval',999)",
+            [stepId, runId],
+          );
+          const id = randomUUID();
+          await pool.query(
+            "INSERT INTO approval_requests(id,project_id,run_id,step_id,action_type,target,reason,risk,status) VALUES($1,$2,$3,$4,'deploy_production',$5,$6,'critical','pending')",
+            [
+              id,
+              run.project_id,
+              runId,
+              stepId,
+              environment,
+              "Release the verified source snapshot to the production deployment adapter.",
+            ],
+          );
+          await pool.query(
+            "INSERT INTO ai_events(id,run_id,level,stage,message) VALUES($1,$2,'approval','deploying','Production deployment is waiting for durable human approval.')",
+            [randomUUID(), runId],
+          );
+          return json(res, 200, {
+            state: "awaiting_approval",
+            simulated: false,
+            approval: {
+              id,
+              step_id: stepId,
+              actionType: "deploy_production",
+              target: environment,
+              reason: "Release verified source to production.",
+              risk: "critical",
+              status: "pending",
+            },
+          });
         }
       }
 
-      const existingDeployment=(await pool.query("SELECT id,status,url,adapter FROM deployments WHERE run_id=$1 ORDER BY created_at DESC LIMIT 1",[runId])).rows[0];
-      if (existingDeployment && !["failed","cancelled"].includes(existingDeployment.status)) {
-        return json(res,200,{state:existingDeployment.status,simulated:false,deployment:{id:existingDeployment.id,provider:existingDeployment.adapter,url:existingDeployment.url||null,reused:true}});
+      const existingDeployment = (
+        await pool.query(
+          "SELECT id,status,url,adapter FROM deployments WHERE run_id=$1 ORDER BY created_at DESC LIMIT 1",
+          [runId],
+        )
+      ).rows[0];
+      if (existingDeployment && !["failed", "cancelled"].includes(existingDeployment.status)) {
+        return json(res, 200, {
+          state: existingDeployment.status,
+          simulated: false,
+          deployment: {
+            id: existingDeployment.id,
+            provider: existingDeployment.adapter,
+            url: existingDeployment.url || null,
+            reused: true,
+          },
+        });
       }
 
-      const files=await latestSource(pool,projectSlug,runId);
-      if (!files.length) return json(res, 409, { error:"source_required" });
-      const selectedDeploy=await selectProvider(deployProviders, preferredDeployProvider);
-      let deployment=null;
-      let selectedProvider=null;
-      const providerAttempts=[];
-      for (const candidate of selectedDeploy.candidates || [{provider:selectedDeploy.provider,health:selectedDeploy.health}]) {
-        const provider=candidate.provider;
-        const secretName=provider.id === "netlify" ? "NETLIFY_AUTH_TOKEN" : "VERCEL_TOKEN";
-        const deploySecret=await secretsProvider.get(secretName);
-        const token=deploySecret?.value || "";
-        const providerAttemptId=randomUUID();
-        await pool.query("INSERT INTO provider_attempts(id,project_id,run_id,kind,provider,capability,status,priority,simulated) VALUES($1,$2,$3,'deploy',$4,'deploy','running',$5,false)",[providerAttemptId,run.project_id,runId,provider.id,candidate.health?.priority||0]).catch(()=>{});
+      const files = await latestSource(pool, projectSlug, runId);
+      if (!files.length) return json(res, 409, { error: "source_required" });
+      const selectedDeploy = await selectProvider(deployProviders, preferredDeployProvider);
+      let deployment = null;
+      let selectedProvider = null;
+      const providerAttempts = [];
+      for (const candidate of selectedDeploy.candidates || [
+        { provider: selectedDeploy.provider, health: selectedDeploy.health },
+      ]) {
+        const provider = candidate.provider;
+        const secretName = provider.id === "netlify" ? "NETLIFY_AUTH_TOKEN" : "VERCEL_TOKEN";
+        const deploySecret = await secretsProvider.get(secretName);
+        const token = deploySecret?.value || "";
+        const providerAttemptId = randomUUID();
+        await pool
+          .query(
+            "INSERT INTO provider_attempts(id,project_id,run_id,kind,provider,capability,status,priority,simulated) VALUES($1,$2,$3,'deploy',$4,'deploy','running',$5,false)",
+            [
+              providerAttemptId,
+              run.project_id,
+              runId,
+              provider.id,
+              candidate.health?.priority || 0,
+            ],
+          )
+          .catch(() => {});
         try {
-          deployment=await provider.deploy({token,projectName:("forgeos-"+projectSlug+"-"+runId.slice(0,8)).toLowerCase(),files,environment});
-          selectedProvider=provider;
-          providerAttempts.push({provider:provider.id,status:"succeeded"});
-          await pool.query("UPDATE provider_attempts SET status='succeeded',completed_at=now(),job_id=$1,observations=$2::jsonb WHERE id=$3",[deployment.deploymentId||null,JSON.stringify({state:deployment.state,url:deployment.url,provider:provider.id}),providerAttemptId]).catch(()=>{});
+          deployment = await provider.deploy({
+            token,
+            projectName: ("forgeos-" + projectSlug + "-" + runId.slice(0, 8)).toLowerCase(),
+            files,
+            environment,
+          });
+          selectedProvider = provider;
+          providerAttempts.push({ provider: provider.id, status: "succeeded" });
+          await pool
+            .query(
+              "UPDATE provider_attempts SET status='succeeded',completed_at=now(),job_id=$1,observations=$2::jsonb WHERE id=$3",
+              [
+                deployment.deploymentId || null,
+                JSON.stringify({
+                  state: deployment.state,
+                  url: deployment.url,
+                  provider: provider.id,
+                }),
+                providerAttemptId,
+              ],
+            )
+            .catch(() => {});
           break;
         } catch (error) {
-          const message=error instanceof Error?error.message:String(error);
-          providerAttempts.push({provider:provider.id,status:"failed",error:message});
-          await pool.query("UPDATE provider_attempts SET status='failed',completed_at=now(),error=$1 WHERE id=$2",[message,providerAttemptId]).catch(()=>{});
+          const message = error instanceof Error ? error.message : String(error);
+          providerAttempts.push({ provider: provider.id, status: "failed", error: message });
+          await pool
+            .query(
+              "UPDATE provider_attempts SET status='failed',completed_at=now(),error=$1 WHERE id=$2",
+              [message, providerAttemptId],
+            )
+            .catch(() => {});
         }
       }
       if (!deployment || !selectedProvider) {
-        const message=providerAttempts.map((a)=>a.provider+":"+a.error).join(";") || "all_deploy_providers_failed";
-        await transitionRun(pool,runId,"failed",{eventStage:"deploying",message:"All deployment providers failed: "+message,level:"error"});
-        await pool.query("INSERT INTO audit_events(id,project_id,actor,actor_name,action,target,risk,approved,diff_summary,stage) VALUES($1,$2,'system','ForgeOS','deploy_failed',$3,'critical',true,$4,'deploying')",[randomUUID(),run.project_id,environment,message]).catch(()=>{});
-        return json(res,502,{state:"failed",simulated:false,error:message,providerAttempts});
+        const message =
+          providerAttempts.map((a) => a.provider + ":" + a.error).join(";") ||
+          "all_deploy_providers_failed";
+        await transitionRun(pool, runId, "failed", {
+          eventStage: "deploying",
+          message: "All deployment providers failed: " + message,
+          level: "error",
+        });
+        await pool
+          .query(
+            "INSERT INTO audit_events(id,project_id,actor,actor_name,action,target,risk,approved,diff_summary,stage) VALUES($1,$2,'system','ForgeOS','deploy_failed',$3,'critical',true,$4,'deploying')",
+            [randomUUID(), run.project_id, environment, message],
+          )
+          .catch(() => {});
+        return json(res, 502, {
+          state: "failed",
+          simulated: false,
+          error: message,
+          providerAttempts,
+        });
       }
-      const deploymentId=randomUUID();
-      const snapshot=(await pool.query("SELECT id FROM source_snapshots WHERE run_id=$1 ORDER BY created_at DESC LIMIT 1",[runId])).rows[0]?.id || null;
-      await pool.query("INSERT INTO deployments(id,project_id,run_id,env,status,commit_sha,url,adapter,simulated) VALUES($1,$2,$3,$4,$5,$6,$7,$8,false)",[deploymentId,run.project_id,runId,environment,deployment.state||"building",snapshot||"",deployment.url||"",selectedDeploy.provider.id]);
-      await pool.query("INSERT INTO deployment_observations(id,deployment_id,status,url,provider_job_id,simulated,detail) VALUES($1,$2,$3,$4,$5,false,$6::jsonb)",[randomUUID(),deploymentId,deployment.state||"building",deployment.url||"",deployment.deploymentId||null,JSON.stringify(deployment)]);
-      await pool.query("INSERT INTO audit_events(id,project_id,actor,actor_name,action,target,risk,approved,diff_summary,stage) VALUES($1,$2,'system','ForgeOS','deploy',$3,'critical',$4,$5,'deploying')",[randomUUID(),run.project_id,environment,true,"Real deployment provider invoked: "+selectedProvider.id+". Attempts: "+JSON.stringify(providerAttempts)]);
-      await transitionRun(pool,runId,"deploying",{eventStage:"deploying",message:"Deployment provider accepted the deployment request."});
-      await pool.query("UPDATE ai_run_steps SET status='done' WHERE run_id=$1 AND stage='review' AND status NOT IN ('rejected')",[runId]);
-      await pool.query("UPDATE ai_run_steps SET status='running' WHERE run_id=$1 AND stage='deploy' AND status NOT IN ('done','rejected')",[runId]);
-      return json(res,200,{state:"deploying",simulated:false,deployment,provider:selectedProvider.id,providerAttempts});
+      const deploymentId = randomUUID();
+      const snapshot =
+        (
+          await pool.query(
+            "SELECT id FROM source_snapshots WHERE run_id=$1 ORDER BY created_at DESC LIMIT 1",
+            [runId],
+          )
+        ).rows[0]?.id || null;
+      await pool.query(
+        "INSERT INTO deployments(id,project_id,run_id,env,status,commit_sha,url,adapter,simulated) VALUES($1,$2,$3,$4,$5,$6,$7,$8,false)",
+        [
+          deploymentId,
+          run.project_id,
+          runId,
+          environment,
+          deployment.state || "building",
+          snapshot || "",
+          deployment.url || "",
+          selectedDeploy.provider.id,
+        ],
+      );
+      await pool.query(
+        "INSERT INTO deployment_observations(id,deployment_id,status,url,provider_job_id,simulated,detail) VALUES($1,$2,$3,$4,$5,false,$6::jsonb)",
+        [
+          randomUUID(),
+          deploymentId,
+          deployment.state || "building",
+          deployment.url || "",
+          deployment.deploymentId || null,
+          JSON.stringify(deployment),
+        ],
+      );
+      await pool.query(
+        "INSERT INTO audit_events(id,project_id,actor,actor_name,action,target,risk,approved,diff_summary,stage) VALUES($1,$2,'system','ForgeOS','deploy',$3,'critical',$4,$5,'deploying')",
+        [
+          randomUUID(),
+          run.project_id,
+          environment,
+          true,
+          "Real deployment provider invoked: " +
+            selectedProvider.id +
+            ". Attempts: " +
+            JSON.stringify(providerAttempts),
+        ],
+      );
+      await transitionRun(pool, runId, "deploying", {
+        eventStage: "deploying",
+        message: "Deployment provider accepted the deployment request.",
+      });
+      await pool.query(
+        "UPDATE ai_run_steps SET status='done' WHERE run_id=$1 AND stage='review' AND status NOT IN ('rejected')",
+        [runId],
+      );
+      await pool.query(
+        "UPDATE ai_run_steps SET status='running' WHERE run_id=$1 AND stage='deploy' AND status NOT IN ('done','rejected')",
+        [runId],
+      );
+      return json(res, 200, {
+        state: "deploying",
+        simulated: false,
+        deployment,
+        provider: selectedProvider.id,
+        providerAttempts,
+      });
     }
 
     if (req.method === "GET" && req.url?.startsWith("/worker/deploy/status")) {
@@ -243,25 +483,48 @@ const server = http.createServer(async (req, res) => {
       const runId = url.searchParams.get("runId");
       let row;
       if (deploymentId) {
-        row = (await pool.query("SELECT d.id,d.project_id,d.run_id,d.status,d.url,d.adapter,d.created_at,do.provider_job_id FROM deployments d LEFT JOIN LATERAL (SELECT provider_job_id FROM deployment_observations WHERE deployment_id=d.id ORDER BY observed_at DESC LIMIT 1) do ON true WHERE d.id=$1 LIMIT 1",[deploymentId])).rows[0];
+        row = (
+          await pool.query(
+            "SELECT d.id,d.project_id,d.run_id,d.status,d.url,d.adapter,d.created_at,do.provider_job_id FROM deployments d LEFT JOIN LATERAL (SELECT provider_job_id FROM deployment_observations WHERE deployment_id=d.id ORDER BY observed_at DESC LIMIT 1) do ON true WHERE d.id=$1 LIMIT 1",
+            [deploymentId],
+          )
+        ).rows[0];
       } else if (runId) {
-        row = (await pool.query("SELECT d.id,d.project_id,d.run_id,d.status,d.url,d.adapter,d.created_at,do.provider_job_id FROM ai_runs ar JOIN deployments d ON d.run_id=ar.id LEFT JOIN LATERAL (SELECT provider_job_id FROM deployment_observations WHERE deployment_id=d.id ORDER BY observed_at DESC LIMIT 1) do ON true WHERE ar.id=$1 ORDER BY d.created_at DESC LIMIT 1",[runId])).rows[0];
+        row = (
+          await pool.query(
+            "SELECT d.id,d.project_id,d.run_id,d.status,d.url,d.adapter,d.created_at,do.provider_job_id FROM ai_runs ar JOIN deployments d ON d.run_id=ar.id LEFT JOIN LATERAL (SELECT provider_job_id FROM deployment_observations WHERE deployment_id=d.id ORDER BY observed_at DESC LIMIT 1) do ON true WHERE ar.id=$1 ORDER BY d.created_at DESC LIMIT 1",
+            [runId],
+          )
+        ).rows[0];
       } else {
         return json(res, 400, { error: "deploymentId_or_runId_required" });
       }
       if (!row) return json(res, 404, { error: "deployment_not_found" });
       const provider = deployProviders.find((item) => item.id === row.adapter);
-      if (!provider || typeof provider.status !== "function") return json(res, 409, { error: "deployment_status_provider_unavailable", provider: row.adapter });
+      if (!provider || typeof provider.status !== "function")
+        return json(res, 409, {
+          error: "deployment_status_provider_unavailable",
+          provider: row.adapter,
+        });
       const secretName = provider.id === "netlify" ? "NETLIFY_AUTH_TOKEN" : "VERCEL_TOKEN";
       const secret = await secretsProvider.get(secretName);
       let observed;
       try {
-        observed = await provider.status({ token: secret?.value || "", deploymentId: row.provider_job_id });
+        observed = await provider.status({
+          token: secret?.value || "",
+          deploymentId: row.provider_job_id,
+        });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         await pool.query(
           "INSERT INTO deployment_observations(id,deployment_id,status,url,provider_job_id,simulated,detail) VALUES($1,$2,'observation_error',$3,$4,false,$5::jsonb)",
-          [randomUUID(), row.id, row.url || "", row.provider_job_id || null, JSON.stringify({ provider: row.adapter, error: message })]
+          [
+            randomUUID(),
+            row.id,
+            row.url || "",
+            row.provider_job_id || null,
+            JSON.stringify({ provider: row.adapter, error: message }),
+          ],
         );
         return json(res, 503, {
           error: "deployment_status_provider_failed",
@@ -283,17 +546,57 @@ const server = http.createServer(async (req, res) => {
         CANCELLED: "cancelled",
         FAILED: "failed",
       };
-      const normalized = statusMap[String(observed.state || "").toUpperCase()] || String(observed.state || row.status || "unknown").toLowerCase();
-      await pool.query("UPDATE deployments SET status=$1,url=$2 WHERE id=$3",[normalized,observed.url||row.url||"",row.id]);
-      await pool.query("INSERT INTO deployment_observations(id,deployment_id,status,url,provider_job_id,simulated,detail) VALUES($1,$2,$3,$4,$5,false,$6::jsonb)",[randomUUID(),row.id,normalized,observed.url||row.url||"",observed.deploymentId||row.provider_job_id||null,JSON.stringify(observed)]);
+      const normalized =
+        statusMap[String(observed.state || "").toUpperCase()] ||
+        String(observed.state || row.status || "unknown").toLowerCase();
+      await pool.query("UPDATE deployments SET status=$1,url=$2 WHERE id=$3", [
+        normalized,
+        observed.url || row.url || "",
+        row.id,
+      ]);
+      await pool.query(
+        "INSERT INTO deployment_observations(id,deployment_id,status,url,provider_job_id,simulated,detail) VALUES($1,$2,$3,$4,$5,false,$6::jsonb)",
+        [
+          randomUUID(),
+          row.id,
+          normalized,
+          observed.url || row.url || "",
+          observed.deploymentId || row.provider_job_id || null,
+          JSON.stringify(observed),
+        ],
+      );
       if (normalized === "ready") {
-        await transitionRun(pool,row.run_id,"deployed",{eventStage:"deploy",message:"Deployment provider reports the deployment is ready."});
-        await pool.query("UPDATE ai_run_steps SET status='done' WHERE run_id=$1 AND stage='deploy'",[row.run_id]);
+        await transitionRun(pool, row.run_id, "deployed", {
+          eventStage: "deploy",
+          message: "Deployment provider reports the deployment is ready.",
+        });
+        await pool.query(
+          "UPDATE ai_run_steps SET status='done' WHERE run_id=$1 AND stage='deploy'",
+          [row.run_id],
+        );
       } else if (normalized === "failed") {
-        await transitionRun(pool,row.run_id,"failed",{eventStage:"deploy",message:"Deployment provider reports deployment failure.",level:"error"});
-        await pool.query("UPDATE ai_run_steps SET status='failed' WHERE run_id=$1 AND stage='deploy' AND status NOT IN ('done','rejected')",[row.run_id]);
+        await transitionRun(pool, row.run_id, "failed", {
+          eventStage: "deploy",
+          message: "Deployment provider reports deployment failure.",
+          level: "error",
+        });
+        await pool.query(
+          "UPDATE ai_run_steps SET status='failed' WHERE run_id=$1 AND stage='deploy' AND status NOT IN ('done','rejected')",
+          [row.run_id],
+        );
       }
-      return json(res, 200, { state: normalized, simulated: false, deployment: { id: row.id, provider: row.adapter, providerStatus: observed.state, deploymentId: observed.deploymentId, url: observed.url||row.url||null, environment: observed.environment||null } });
+      return json(res, 200, {
+        state: normalized,
+        simulated: false,
+        deployment: {
+          id: row.id,
+          provider: row.adapter,
+          providerStatus: observed.state,
+          deploymentId: observed.deploymentId,
+          url: observed.url || row.url || null,
+          environment: observed.environment || null,
+        },
+      });
     }
 
     if (req.method === "POST" && req.url === "/worker/source/push") {
@@ -303,33 +606,94 @@ const server = http.createServer(async (req, res) => {
       const runId = payload.runId;
       const projectSlug = String(payload.projectSlug || "forgeos").toLowerCase();
       if (!runId) return json(res, 400, { error: "runId_required" });
-      if (!/^[a-z0-9][a-z0-9-]{0,62}$/.test(projectSlug)) return json(res, 400, { error: "unsafe_project_slug" });
-      const run = (await pool.query("SELECT id,project_id,status FROM ai_runs WHERE id=$1 LIMIT 1",[runId])).rows[0];
+      if (!/^[a-z0-9][a-z0-9-]{0,62}$/.test(projectSlug))
+        return json(res, 400, { error: "unsafe_project_slug" });
+      const run = (
+        await pool.query("SELECT id,project_id,status FROM ai_runs WHERE id=$1 LIMIT 1", [runId])
+      ).rows[0];
       if (!run) return json(res, 404, { error: "run_not_found" });
       if (run.status !== "review") return json(res, 409, { error: "source_push_requires_review" });
-      const approved = (await pool.query("SELECT id FROM approval_requests WHERE run_id=$1 AND action_type='source_push' AND status='approved' ORDER BY decided_at DESC LIMIT 1",[runId])).rows[0];
+      const approved = (
+        await pool.query(
+          "SELECT id FROM approval_requests WHERE run_id=$1 AND action_type='source_push' AND status='approved' ORDER BY decided_at DESC LIMIT 1",
+          [runId],
+        )
+      ).rows[0];
       if (!approved) {
-        const pending = (await pool.query("SELECT id,step_id,target,reason,risk,status FROM approval_requests WHERE run_id=$1 AND action_type='source_push' AND status='pending' ORDER BY created_at DESC LIMIT 1",[runId])).rows[0];
-        if (pending) return json(res, 200, { state:"awaiting_approval", simulated:false, approval:pending });
-        const stepId=randomUUID(), approvalId=randomUUID();
-        await pool.query("INSERT INTO ai_run_steps(id,run_id,title,detail,stage,risk,status,order_idx) VALUES($1,$2,'GitHub source synchronization','Push the verified source snapshot to an isolated ForgeOS branch.','review','high','awaiting_approval',998)",[stepId,runId]);
-        await pool.query("INSERT INTO approval_requests(id,project_id,run_id,step_id,action_type,target,reason,risk,status) VALUES($1,$2,$3,$4,'source_push',$5,$6,'high','pending')",[approvalId,run.project_id,runId,stepId,"github/"+projectSlug,"Synchronize the verified source snapshot to an isolated branch."]);
-        return json(res,200,{state:"awaiting_approval",simulated:false,approval:{id:approvalId,step_id:stepId,actionType:"source_push",target:"github/"+projectSlug,reason:"Synchronize verified source.",risk:"high",status:"pending"}});
+        const pending = (
+          await pool.query(
+            "SELECT id,step_id,target,reason,risk,status FROM approval_requests WHERE run_id=$1 AND action_type='source_push' AND status='pending' ORDER BY created_at DESC LIMIT 1",
+            [runId],
+          )
+        ).rows[0];
+        if (pending)
+          return json(res, 200, {
+            state: "awaiting_approval",
+            simulated: false,
+            approval: pending,
+          });
+        const stepId = randomUUID(),
+          approvalId = randomUUID();
+        await pool.query(
+          "INSERT INTO ai_run_steps(id,run_id,title,detail,stage,risk,status,order_idx) VALUES($1,$2,'GitHub source synchronization','Push the verified source snapshot to an isolated ForgeOS branch.','review','high','awaiting_approval',998)",
+          [stepId, runId],
+        );
+        await pool.query(
+          "INSERT INTO approval_requests(id,project_id,run_id,step_id,action_type,target,reason,risk,status) VALUES($1,$2,$3,$4,'source_push',$5,$6,'high','pending')",
+          [
+            approvalId,
+            run.project_id,
+            runId,
+            stepId,
+            "github/" + projectSlug,
+            "Synchronize the verified source snapshot to an isolated branch.",
+          ],
+        );
+        return json(res, 200, {
+          state: "awaiting_approval",
+          simulated: false,
+          approval: {
+            id: approvalId,
+            step_id: stepId,
+            actionType: "source_push",
+            target: "github/" + projectSlug,
+            reason: "Synchronize verified source.",
+            risk: "high",
+            status: "pending",
+          },
+        });
       }
-      const files=await latestSource(pool,projectSlug);
-      if (!files.length) return json(res,409,{error:"source_required"});
-      const branch="forgeos/"+projectSlug+"/run-"+runId.replace(/-/g,"").slice(0,8);
-      const pushed=await sourceProvider.pushFiles({files,branch,base:"main",message:"ForgeOS: generated source for run "+runId});
-      await pool.query("UPDATE source_snapshots SET provider=$1,verified=true WHERE id=(SELECT id FROM source_snapshots WHERE run_id=$2 ORDER BY created_at DESC LIMIT 1)",[sourceProvider.id,run.project_id]);
-      await pool.query("INSERT INTO audit_events(id,project_id,actor,actor_name,action,target,risk,approved,diff_summary,stage) VALUES($1,$2,'system','ForgeOS','source_push',$3,'high',true,$4,'review')",[randomUUID(),run.project_id,"github/"+branch,"Verified source synchronized to isolated GitHub branch."]);
-      return json(res,200,{state:"synchronized",simulated:false,branch,pushed});
+      const files = await latestSource(pool, projectSlug);
+      if (!files.length) return json(res, 409, { error: "source_required" });
+      const branch = "forgeos/" + projectSlug + "/run-" + runId.replace(/-/g, "").slice(0, 8);
+      const pushed = await sourceProvider.pushFiles({
+        files,
+        branch,
+        base: "main",
+        message: "ForgeOS: generated source for run " + runId,
+      });
+      await pool.query(
+        "UPDATE source_snapshots SET provider=$1,verified=true WHERE id=(SELECT id FROM source_snapshots WHERE run_id=$2 ORDER BY created_at DESC LIMIT 1)",
+        [sourceProvider.id, run.project_id],
+      );
+      await pool.query(
+        "INSERT INTO audit_events(id,project_id,actor,actor_name,action,target,risk,approved,diff_summary,stage) VALUES($1,$2,'system','ForgeOS','source_push',$3,'high',true,$4,'review')",
+        [
+          randomUUID(),
+          run.project_id,
+          "github/" + branch,
+          "Verified source synchronized to isolated GitHub branch.",
+        ],
+      );
+      return json(res, 200, { state: "synchronized", simulated: false, branch, pushed });
     }
 
     if (req.method === "POST" && req.url === "/worker/approve") {
       if (!(await authorized(req))) return json(res, 401, { error: "worker_auth_required" });
       if (!pool) return json(res, 503, { error: "worker_database_not_configured" });
       const payload = await body(req);
-      if (!payload.runId || !payload.approvalId) return json(res, 400, { error: "runId_and_approvalId_required" });
+      if (!payload.runId || !payload.approvalId)
+        return json(res, 400, { error: "runId_and_approvalId_required" });
       try {
         const result = await approveBuild(pool, {
           runId: payload.runId,
@@ -339,7 +703,9 @@ const server = http.createServer(async (req, res) => {
         });
         return json(res, 200, { ...result, simulated: false });
       } catch (error) {
-        return json(res, 409, { error: error instanceof Error ? error.message : "approval_failed" });
+        return json(res, 409, {
+          error: error instanceof Error ? error.message : "approval_failed",
+        });
       }
     }
 
@@ -363,17 +729,49 @@ const server = http.createServer(async (req, res) => {
       if (!pool) return json(res, 503, { error: "worker_database_not_configured" });
       const runId = decodeURIComponent(req.url.slice("/worker/run/".length));
       if (!runId) return json(res, 400, { error: "runId_required" });
-      const run = (await pool.query("SELECT id,project_id,prompt,provider,model,status,started_at,created_at,updated_at,completed_at FROM ai_runs WHERE id=$1 LIMIT 1",[runId])).rows[0];
+      const run = (
+        await pool.query(
+          "SELECT id,project_id,prompt,provider,model,status,started_at,created_at,updated_at,completed_at FROM ai_runs WHERE id=$1 LIMIT 1",
+          [runId],
+        )
+      ).rows[0];
       if (!run) return json(res, 404, { error: "run_not_found" });
-      const [steps,events,approvals,tests,deployments,providerAttempts] = await Promise.all([
-        pool.query("SELECT id,title,detail,stage,risk,status,order_idx FROM ai_run_steps WHERE run_id=$1 ORDER BY order_idx,id",[runId]),
-        pool.query("SELECT id,level,stage,message,created_at FROM ai_events WHERE run_id=$1 ORDER BY created_at,id",[runId]),
-        pool.query("SELECT id,step_id,action_type,target,reason,risk,status,created_at,decided_at FROM approval_requests WHERE run_id=$1 ORDER BY created_at,id",[runId]),
-        pool.query("SELECT id,status,provider,created_at,completed_at,error FROM test_runs WHERE run_id=$1 ORDER BY created_at,id",[runId]),
-        pool.query("SELECT id,env,status,url,adapter,created_at FROM deployments WHERE run_id=$1 ORDER BY created_at,id",[runId]),
-        pool.query("SELECT id,kind,provider,capability,status,priority,simulated,started_at,completed_at,error FROM provider_attempts WHERE run_id=$1 ORDER BY started_at,id",[runId])
+      const [steps, events, approvals, tests, deployments, providerAttempts] = await Promise.all([
+        pool.query(
+          "SELECT id,title,detail,stage,risk,status,order_idx FROM ai_run_steps WHERE run_id=$1 ORDER BY order_idx,id",
+          [runId],
+        ),
+        pool.query(
+          "SELECT id,level,stage,message,created_at FROM ai_events WHERE run_id=$1 ORDER BY created_at,id",
+          [runId],
+        ),
+        pool.query(
+          "SELECT id,step_id,action_type,target,reason,risk,status,created_at,decided_at FROM approval_requests WHERE run_id=$1 ORDER BY created_at,id",
+          [runId],
+        ),
+        pool.query(
+          "SELECT id,status,provider,created_at,completed_at,error FROM test_runs WHERE run_id=$1 ORDER BY created_at,id",
+          [runId],
+        ),
+        pool.query(
+          "SELECT id,env,status,url,adapter,created_at FROM deployments WHERE run_id=$1 ORDER BY created_at,id",
+          [runId],
+        ),
+        pool.query(
+          "SELECT id,kind,provider,capability,status,priority,simulated,started_at,completed_at,error FROM provider_attempts WHERE run_id=$1 ORDER BY started_at,id",
+          [runId],
+        ),
       ]);
-      return json(res,200,{run,steps:steps.rows,events:events.rows,approvals:approvals.rows,tests:tests.rows,deployments:deployments.rows,providerAttempts:providerAttempts.rows,simulated:false});
+      return json(res, 200, {
+        run,
+        steps: steps.rows,
+        events: events.rows,
+        approvals: approvals.rows,
+        tests: tests.rows,
+        deployments: deployments.rows,
+        providerAttempts: providerAttempts.rows,
+        simulated: false,
+      });
     }
 
     if (req.method === "GET" && req.url === "/worker/projects") {
@@ -386,8 +784,13 @@ const server = http.createServer(async (req, res) => {
       if (!(await authorized(req))) return json(res, 401, { error: "worker_auth_required" });
       if (!pool) return json(res, 503, { error: "worker_database_not_configured" });
       const payload = await body(req);
-      if (!payload.slug || !payload.name || !payload.prompt) return json(res, 400, { error: "slug_name_prompt_required" });
-      const projectId = await ensureProject(pool, String(payload.slug).toLowerCase(), payload.prompt);
+      if (!payload.slug || !payload.name || !payload.prompt)
+        return json(res, 400, { error: "slug_name_prompt_required" });
+      const projectId = await ensureProject(
+        pool,
+        String(payload.slug).toLowerCase(),
+        payload.prompt,
+      );
       const project = await readProject(pool, String(payload.slug).toLowerCase());
       return json(res, 201, { project: project?.project || null, projectId, simulated: false });
     }
@@ -403,7 +806,9 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "GET" && req.url === "/worker/source/latest") {
       if (!(await authorized(req))) return json(res, 401, { error: "worker_auth_required" });
       if (!pool) return json(res, 503, { error: "worker_database_not_configured" });
-      return json(res, 200, { files: await latestSource(pool, req.headers["x-forgeos-project-slug"] || "forgeos") });
+      return json(res, 200, {
+        files: await latestSource(pool, req.headers["x-forgeos-project-slug"] || "forgeos"),
+      });
     }
 
     if (req.method === "POST" && req.url === "/worker/jobs") {
@@ -416,22 +821,31 @@ const server = http.createServer(async (req, res) => {
       const executionRunId = payload.runId || null;
       if (executionRunId) activeControllers.set(executionRunId, controller);
       let result;
-      try { result = await execute(executionRunId, payload.files || [], { signal: controller.signal }); }
-      finally { if (executionRunId) activeControllers.delete(executionRunId); }
+      try {
+        result = await execute(executionRunId, payload.files || [], { signal: controller.signal });
+      } finally {
+        if (executionRunId) activeControllers.delete(executionRunId);
+      }
 
       return json(res, result.state === "passed" ? 200 : 422, result);
     }
 
     if (req.method === "POST" && req.url === "/worker/run/recover") {
-      if (!authorized(req)) return json(res,401,{error:"worker_auth_required"});
-      if (!pool) return json(res,503,{error:"worker_database_not_configured"});
-      const payload=await body(req);
-      if(!payload.runId)return json(res,400,{error:"runId_required"});
-      const run=(await pool.query("SELECT id,status FROM ai_runs WHERE id=$1 LIMIT 1",[payload.runId])).rows[0];
-      if(!run)return json(res,404,{error:"run_not_found"});
-      if(run.status!=="recovery_required")return json(res,409,{error:"run_not_recoverable",status:run.status});
-      await transitionRun(pool,payload.runId,"executing",{eventStage:"recovery",message:"Run explicitly recovered after worker interruption."});
-      return json(res,200,{state:"recovered",simulated:false,runId:payload.runId});
+      if (!authorized(req)) return json(res, 401, { error: "worker_auth_required" });
+      if (!pool) return json(res, 503, { error: "worker_database_not_configured" });
+      const payload = await body(req);
+      if (!payload.runId) return json(res, 400, { error: "runId_required" });
+      const run = (
+        await pool.query("SELECT id,status FROM ai_runs WHERE id=$1 LIMIT 1", [payload.runId])
+      ).rows[0];
+      if (!run) return json(res, 404, { error: "run_not_found" });
+      if (run.status !== "recovery_required")
+        return json(res, 409, { error: "run_not_recoverable", status: run.status });
+      await transitionRun(pool, payload.runId, "executing", {
+        eventStage: "recovery",
+        message: "Run explicitly recovered after worker interruption.",
+      });
+      return json(res, 200, { state: "recovered", simulated: false, runId: payload.runId });
     }
 
     if (req.method === "POST" && req.url === "/worker/jobs/cancel") {
@@ -439,17 +853,36 @@ const server = http.createServer(async (req, res) => {
         return json(res, 401, { error: "worker_auth_required" });
       }
 
-      const payload=await body(req);
-      if(!payload.runId)return json(res,400,{error:"runId_required"});
-      const run=(await pool.query("SELECT id,status FROM ai_runs WHERE id=$1 LIMIT 1",[payload.runId])).rows[0];
-      if(!run)return json(res,404,{error:"run_not_found"});
-      if(["deployed","failed","cancelled","rejected"].includes(run.status))return json(res,409,{error:"run_already_terminal",status:run.status});
+      const payload = await body(req);
+      if (!payload.runId) return json(res, 400, { error: "runId_required" });
+      const run = (
+        await pool.query("SELECT id,status FROM ai_runs WHERE id=$1 LIMIT 1", [payload.runId])
+      ).rows[0];
+      if (!run) return json(res, 404, { error: "run_not_found" });
+      if (["deployed", "failed", "cancelled", "rejected"].includes(run.status))
+        return json(res, 409, { error: "run_already_terminal", status: run.status });
       const activeController = activeControllers.get(payload.runId);
       if (activeController) activeController.abort();
-      await transitionRun(pool,payload.runId,"cancelled",{eventStage:"cancelled",message:activeController ? "Run cancellation requested; active provider process aborted." : "Run cancelled by user."});
-      await pool.query("UPDATE provider_attempts SET status='cancelled',completed_at=now(),error=coalesce(error,'cancelled_by_user') WHERE run_id=$1 AND status IN ('running','pending')",[payload.runId]);
-      await pool.query("UPDATE ai_run_steps SET status='cancelled' WHERE run_id=$1 AND status IN ('running','pending','awaiting_review')",[payload.runId]);
-      return json(res,200,{accepted:true,cancelled:true,simulated:false,runId:payload.runId});
+      await transitionRun(pool, payload.runId, "cancelled", {
+        eventStage: "cancelled",
+        message: activeController
+          ? "Run cancellation requested; active provider process aborted."
+          : "Run cancelled by user.",
+      });
+      await pool.query(
+        "UPDATE provider_attempts SET status='cancelled',completed_at=now(),error=coalesce(error,'cancelled_by_user') WHERE run_id=$1 AND status IN ('running','pending')",
+        [payload.runId],
+      );
+      await pool.query(
+        "UPDATE ai_run_steps SET status='cancelled' WHERE run_id=$1 AND status IN ('running','pending','awaiting_review')",
+        [payload.runId],
+      );
+      return json(res, 200, {
+        accepted: true,
+        cancelled: true,
+        simulated: false,
+        runId: payload.runId,
+      });
     }
 
     return json(res, 404, { error: "not_found" });
@@ -465,15 +898,32 @@ let databaseLastError = null;
 
 async function recoverInterruptedRuns() {
   if (!pool) return;
-  const interrupted=(await pool.query("SELECT id,status FROM ai_runs WHERE status IN ('testing','executing','building','repairing','deploying')")).rows;
+  const interrupted = (
+    await pool.query(
+      "SELECT id,status FROM ai_runs WHERE status IN ('testing','executing','building','repairing','deploying')",
+    )
+  ).rows;
   for (const run of interrupted) {
     try {
-      await transitionRun(pool,run.id,"recovery_required",{eventStage:"recovery",level:"warn",message:"Worker restart detected; execution requires explicit recovery."});
+      await transitionRun(pool, run.id, "recovery_required", {
+        eventStage: "recovery",
+        level: "warn",
+        message: "Worker restart detected; execution requires explicit recovery.",
+      });
     } catch (error) {
-      console.error(JSON.stringify({service:"forgeos-execution-worker",recoveryTransitionFailed:true,runId:run.id,error:error instanceof Error?error.message:String(error)}));
+      console.error(
+        JSON.stringify({
+          service: "forgeos-execution-worker",
+          recoveryTransitionFailed: true,
+          runId: run.id,
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
     }
   }
-  await pool.query("UPDATE provider_attempts SET status='interrupted',completed_at=now(),error=coalesce(error,'worker_restart_interrupted_attempt') WHERE status='running'");
+  await pool.query(
+    "UPDATE provider_attempts SET status='interrupted',completed_at=now(),error=coalesce(error,'worker_restart_interrupted_attempt') WHERE status='running'",
+  );
 }
 
 async function initializeDatabase() {
@@ -483,29 +933,35 @@ async function initializeDatabase() {
     databaseReady = true;
     databaseLastError = null;
     await recoverInterruptedRuns();
-    console.log(JSON.stringify({ service: "forgeos-execution-worker", databaseSchema: "migrations-ready" }));
+    console.log(
+      JSON.stringify({ service: "forgeos-execution-worker", databaseSchema: "migrations-ready" }),
+    );
   } catch (error) {
     databaseReady = false;
     databaseLastError = error instanceof Error ? error.message : String(error);
-    console.error(JSON.stringify({
-      service: "forgeos-execution-worker",
-      database: "unavailable",
-      error: databaseLastError,
-      retrying: true
-    }));
+    console.error(
+      JSON.stringify({
+        service: "forgeos-execution-worker",
+        database: "unavailable",
+        error: databaseLastError,
+        retrying: true,
+      }),
+    );
     setTimeout(initializeDatabase, 10000);
   }
 }
 
 function startServer() {
   server.listen(PORT, "0.0.0.0", () => {
-    console.log(JSON.stringify({
-      service: "forgeos-execution-worker",
-      port: PORT,
-      realExecution: true,
-      authenticatedExecution: Boolean(WORKER_TOKEN),
-      databaseConfigured: Boolean(pool),
-    }));
+    console.log(
+      JSON.stringify({
+        service: "forgeos-execution-worker",
+        port: PORT,
+        realExecution: true,
+        authenticatedExecution: Boolean(WORKER_TOKEN),
+        databaseConfigured: Boolean(pool),
+      }),
+    );
   });
 }
 

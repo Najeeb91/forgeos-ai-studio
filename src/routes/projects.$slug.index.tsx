@@ -69,9 +69,7 @@ function Overview() {
               <div className="flex flex-wrap gap-2">
                 <Pill tone="info">{run.provider}</Pill>
                 <Pill tone="warning">{run.status.replace("_", " ")}</Pill>
-                <Pill tone="neutral">
-                  {run.tokensIn + run.tokensOut} tokens
-                </Pill>
+                <Pill tone="neutral">{run.tokensIn + run.tokensOut} tokens</Pill>
               </div>
               <ul className="space-y-1.5">
                 {run.plan.map((step) => (

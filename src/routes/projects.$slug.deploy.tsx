@@ -86,7 +86,8 @@ function Deploy() {
           <div>
             <p className="font-medium">Production release requires human approval.</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Production rollout is available only after a real test pass and a durable human approval. ForgeOS never fabricates a deployment URL or success state.
+              Production rollout is available only after a real test pass and a durable human
+              approval. ForgeOS never fabricates a deployment URL or success state.
             </p>
           </div>
         </div>

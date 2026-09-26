@@ -3,10 +3,12 @@
 The worker selects its execution implementation through `FORGEOS_BUILD_PROVIDER`.
 
 Current:
+
 - `local-process`: bounded real execution used by the launch runtime.
 - `docker`: isolated real execution using a disposable Docker volume and container.
 
 Docker mode:
+
 - install phase uses network access only for dependency installation;
 - build phase runs with `--network none`;
 - container drops all Linux capabilities and uses no-new-privileges;
@@ -16,6 +18,7 @@ Docker mode:
 - the image must already exist on the host; ForgeOS does not silently pull arbitrary images.
 
 Planned:
+
 - `remote-vm`: disposable cloud VM execution.
 - `kubernetes`: isolated job execution.
 - `user-hosted`: execution on infrastructure controlled by the ForgeOS operator.

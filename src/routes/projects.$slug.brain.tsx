@@ -13,7 +13,8 @@ export const Route = createFileRoute("/projects/$slug/brain")({
 function Brain() {
   const { slug } = Route.useParams();
   const project = useForgeProject();
-  const { requirements, decisions, architecture, schema, integrations, tests, history } = project.brain;
+  const { requirements, decisions, architecture, schema, integrations, tests, history } =
+    project.brain;
 
   return (
     <PageBody>
@@ -42,7 +43,9 @@ function Brain() {
                       <span className="text-sm font-medium">{item.title}</span>
                       <div className="flex flex-wrap gap-2">
                         <Pill tone="neutral">{item.kind.replace("_", " ")}</Pill>
-                        <Pill tone={item.priority === "must" ? "primary" : "neutral"}>{item.priority}</Pill>
+                        <Pill tone={item.priority === "must" ? "primary" : "neutral"}>
+                          {item.priority}
+                        </Pill>
                         <Pill
                           tone={
                             item.status === "implemented"
@@ -74,7 +77,9 @@ function Brain() {
             <div className="grid gap-4 xl:grid-cols-2">
               {decisions.map((decision) => (
                 <Panel key={decision.id} title={decision.title}>
-                  <p className="text-xs leading-relaxed text-muted-foreground">{decision.rationale}</p>
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    {decision.rationale}
+                  </p>
                   <div className="mt-3 space-y-1 font-mono text-[11px] text-muted-foreground">
                     <div>alternatives: {decision.alternatives.join(" · ")}</div>
                     <div>decided: {new Date(decision.decidedAt).toLocaleDateString()}</div>
@@ -111,7 +116,10 @@ function Brain() {
               </ul>
             </Panel>
           ) : (
-            <EmptyState title="Architecture not drafted" hint="The architecture layer records the system shape." />
+            <EmptyState
+              title="Architecture not drafted"
+              hint="The architecture layer records the system shape."
+            />
           )}
         </TabsContent>
 
@@ -136,11 +144,19 @@ function Brain() {
                           <tr key={`${table.name}-${column.name}`}>
                             <td className="px-3 py-2 font-mono">{column.name}</td>
                             <td className="px-3 py-2 font-mono text-info">{column.type}</td>
-                            <td className="px-3 py-2">{column.nullable ? "nullable" : "not null"}</td>
-                            <td className="px-3 py-2 text-muted-foreground">
-                              {column.key ? column.key : column.references ? column.references : "—"}
+                            <td className="px-3 py-2">
+                              {column.nullable ? "nullable" : "not null"}
                             </td>
-                            <td className="px-3 py-2 text-muted-foreground">{column.note ?? "—"}</td>
+                            <td className="px-3 py-2 text-muted-foreground">
+                              {column.key
+                                ? column.key
+                                : column.references
+                                  ? column.references
+                                  : "—"}
+                            </td>
+                            <td className="px-3 py-2 text-muted-foreground">
+                              {column.note ?? "—"}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -160,7 +176,10 @@ function Brain() {
               ))}
             </div>
           ) : (
-            <EmptyState title="No schema captured" hint="This project does not yet have a generated schema in the brain." />
+            <EmptyState
+              title="No schema captured"
+              hint="This project does not yet have a generated schema in the brain."
+            />
           )}
         </TabsContent>
 
@@ -208,7 +227,10 @@ function Brain() {
               ))}
             </div>
           ) : (
-            <EmptyState title="No integrations captured" hint="Integration references recorded here will show provider status and notes." />
+            <EmptyState
+              title="No integrations captured"
+              hint="Integration references recorded here will show provider status and notes."
+            />
           )}
         </TabsContent>
 
@@ -255,7 +277,10 @@ function Brain() {
               </div>
             </Panel>
           ) : (
-            <EmptyState title="No tests captured" hint="The test stage stores suites and test status for the project." />
+            <EmptyState
+              title="No tests captured"
+              hint="The test stage stores suites and test status for the project."
+            />
           )}
         </TabsContent>
 
@@ -271,7 +296,15 @@ function Brain() {
                       </time>
                       <Pill tone="neutral">{item.actor}</Pill>
                       {item.stage ? <Pill tone="info">{item.stage}</Pill> : null}
-                      <Pill tone={item.risk === "high" ? "danger" : item.risk === "medium" ? "warning" : "neutral"}>
+                      <Pill
+                        tone={
+                          item.risk === "high"
+                            ? "danger"
+                            : item.risk === "medium"
+                              ? "warning"
+                              : "neutral"
+                        }
+                      >
                         risk: {item.risk}
                       </Pill>
                     </div>
@@ -285,7 +318,10 @@ function Brain() {
               </div>
             </Panel>
           ) : (
-            <EmptyState title="No history recorded" hint="Project Brain history will accumulate AI and human actions here." />
+            <EmptyState
+              title="No history recorded"
+              hint="Project Brain history will accumulate AI and human actions here."
+            />
           )}
         </TabsContent>
       </Tabs>
