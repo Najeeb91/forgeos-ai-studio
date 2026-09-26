@@ -5,7 +5,6 @@ import { useMemo, useState } from "react";
 import { EmptyState, PageBody, Panel } from "@/components/forge/shell";
 import { FilterBar, MetaList, ProvenanceBadge } from "@/components/forge/primitives";
 import { Pill } from "@/components/forge/status";
-import { useForgeProject } from "@/lib/forge/use-project";
 import { integrationTone } from "@/lib/forge/tone";
 import type { IntegrationRef } from "@/lib/forge/types";
 
