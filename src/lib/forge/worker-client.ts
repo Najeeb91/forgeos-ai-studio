@@ -18,7 +18,8 @@ export async function getLatestGeneratedSource(projectSlug:string):Promise<Worke
   const response=await fetch(`${url}/worker/source/latest`,{headers:{authorization:`Bearer ${token}`,"x-forgeos-project-slug":projectSlug}});
   const text=await response.text();
   if(!response.ok)throw new Error(`Generated source lookup failed (HTTP ${response.status})`);
-  const payload=JSON.parse(text) as {files?:WorkerSourceFile[]};
+  let payload:{files?:WorkerSourceFile[]};
+  try{payload=JSON.parse(text) as {files?:WorkerSourceFile[]}}catch{throw new Error(`Generated source lookup returned invalid JSON (HTTP ${response.status})`);}
   return payload.files??[];
 }
 
@@ -27,7 +28,9 @@ export async function getProjectFromWorker(projectSlug:string):Promise<{project?
   const response=await fetch(`${url}/worker/project/${encodeURIComponent(projectSlug)}`,{headers:{authorization:`Bearer ${token}`}});
   const text=await response.text();
   if(!response.ok) throw new Error(`Project lookup failed (HTTP ${response.status})`);
-  return JSON.parse(text) as {project?:any};
+  let payload:{project?:any};
+  try{payload=JSON.parse(text) as {project?:any}}catch{throw new Error(`Project lookup returned invalid JSON (HTTP ${response.status})`);}
+  return payload;
 }
 
 export async function approveBuild(runId:string,approvalId:string,decision:"approved"|"rejected"="approved"):Promise<any>{
