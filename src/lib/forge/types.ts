@@ -159,7 +159,15 @@ export interface AiRun {
 
 export interface ProjectMemoryEntry {
   id: string;
-  kind: "conversation" | "requirement" | "decision" | "assumption" | "constraint" | "milestone" | "change" | "outcome";
+  kind:
+    | "conversation"
+    | "requirement"
+    | "decision"
+    | "assumption"
+    | "constraint"
+    | "milestone"
+    | "change"
+    | "outcome";
   title: string;
   content: string;
   authorType: "user" | "ai" | "system";
@@ -221,7 +229,11 @@ export interface Project {
   memory?: ProjectMemoryEntry[];
   approvals?: ApprovalRequest[];
   providerAttempts?: ProviderAttempt[];
-  conversation?: { id: string; title: string; messages: { id: string; role: string; content: string; createdAt: string }[] };
+  conversation?: {
+    id: string;
+    title: string;
+    messages: { id: string; role: string; content: string; createdAt: string }[];
+  };
   deploymentHistory?: Deployment[];
 }
 

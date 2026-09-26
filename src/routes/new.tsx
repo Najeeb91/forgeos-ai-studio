@@ -73,10 +73,17 @@ function NewProject() {
                   return;
                 }
                 const projectName = name.trim() || "Untitled ForgeOS Project";
-                const slug = projectName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 63) || "forgeos-project";
+                const slug =
+                  projectName
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/g, "-")
+                    .replace(/^-+|-+$/g, "")
+                    .slice(0, 63) || "forgeos-project";
                 setCreating(true);
                 try {
-                  await createForgeProjectRemote({ data: { slug, name: projectName, prompt: idea.trim() } });
+                  await createForgeProjectRemote({
+                    data: { slug, name: projectName, prompt: idea.trim() },
+                  });
                   toast.success("Project created — opening its builder.");
                   await navigate({ to: "/projects/$slug/builder", params: { slug } });
                 } catch (error) {
@@ -146,7 +153,10 @@ function NewProject() {
           </Panel>
         </div>
 
-        <Panel title="What happens next" description="The lifecycle ForgeOS drives for every build.">
+        <Panel
+          title="What happens next"
+          description="The lifecycle ForgeOS drives for every build."
+        >
           <ol className="space-y-3">
             {STAGE_ORDER.map((stage, i) => (
               <li key={stage.id} className="flex gap-3">

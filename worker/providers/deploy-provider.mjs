@@ -2,7 +2,7 @@ import { deployVercel, getVercelDeployment } from "../deployment-core.mjs";
 import { createNetlifyDeployProvider } from "./netlify-deploy-provider.mjs";
 
 export class VercelDeployProvider {
-  constructor(secretsProvider=null) {
+  constructor(secretsProvider = null) {
     this.id = "vercel";
     this.capability = "deploy";
     this.secrets = secretsProvider;
@@ -13,8 +13,12 @@ export class VercelDeployProvider {
       ok: Boolean(this.secrets ? await this.secrets.get("VERCEL_TOKEN") : process.env.VERCEL_TOKEN),
       provider: this.id,
       capability: this.capability,
-      configured: Boolean(this.secrets ? await this.secrets.get("VERCEL_TOKEN") : process.env.VERCEL_TOKEN),
-      realExecution: Boolean(this.secrets ? await this.secrets.get("VERCEL_TOKEN") : process.env.VERCEL_TOKEN),
+      configured: Boolean(
+        this.secrets ? await this.secrets.get("VERCEL_TOKEN") : process.env.VERCEL_TOKEN,
+      ),
+      realExecution: Boolean(
+        this.secrets ? await this.secrets.get("VERCEL_TOKEN") : process.env.VERCEL_TOKEN,
+      ),
     };
   }
 
@@ -27,11 +31,11 @@ export class VercelDeployProvider {
   }
 }
 
-export function createDeployProviders(secretsProvider=null) {
+export function createDeployProviders(secretsProvider = null) {
   return [new VercelDeployProvider(secretsProvider), createNetlifyDeployProvider(secretsProvider)];
 }
 
-export function createDeployProvider(secretsProvider=null) {
+export function createDeployProvider(secretsProvider = null) {
   const provider = process.env.FORGEOS_DEPLOY_PROVIDER || "vercel";
   if (provider === "vercel") return new VercelDeployProvider(secretsProvider);
   if (provider === "netlify") return createNetlifyDeployProvider(secretsProvider);
