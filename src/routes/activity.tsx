@@ -64,11 +64,7 @@ function Activity() {
                     </Link>
                     <Pill
                       tone={
-                        entry.actor === "ai"
-                          ? "primary"
-                          : entry.actor === "human"
-                            ? "info"
-                            : "neutral"
+                        entry.actor === "ai" ? "primary" : entry.actor === "human" ? "info" : "neutral"
                       }
                     >
                       {entry.actorName}
