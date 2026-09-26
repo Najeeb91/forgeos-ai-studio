@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "test": "node --experimental-strip-types --test test/run-state.test.mjs test/auth-provider.test.mjs test/provider-registry.test.mjs test/preview-doc.test.mjs"
+    "test": "node --experimental-strip-types --test test/run-state.test.mjs test/auth-provider.test.mjs test/provider-registry.test.mjs test/preview-doc.test.mjs test/worker-client.test.mjs"
   },
   "overrides": {
     "rolldown": "1.2.1"
