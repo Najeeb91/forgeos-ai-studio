@@ -32,7 +32,7 @@ export class NetlifyDeployProvider extends ForgeOSProvider {
       if(!siteId){
         const list=await fetch(API+"/sites?name="+encodeURIComponent(name),{headers:{Authorization:"Bearer "+token}});
         const sites=await list.json().catch(()=>[]);
-        siteId=Array.isArray(sites)?sites.find(s=>s.name===name)?.id||"":""; 
+        siteId=Array.isArray(sites)?sites.find(s=>s.name===name)?.id||"":"";
       }
     }
     if(!siteId)throw new Error("netlify_site_id_unavailable");

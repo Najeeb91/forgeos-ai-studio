@@ -173,7 +173,7 @@ const server = http.createServer(async (req, res) => {
       const exactSnapshot=(await pool.query("SELECT id FROM source_snapshots WHERE run_id=$1 ORDER BY created_at DESC LIMIT 1",[runId])).rows[0];
       const exactTest=(await pool.query("SELECT id FROM test_runs WHERE run_id=$1 AND status='passed' ORDER BY created_at DESC LIMIT 1",[runId])).rows[0];
       if(!exactSnapshot || !exactTest) return json(res,409,{error:"exact_run_evidence_required",snapshot:!!exactSnapshot,test:!!exactTest});
-      
+
       if (environment === "production") {
         const approved = (await pool.query("SELECT id FROM approval_requests WHERE run_id=$1 AND action_type='deploy_production' AND status='approved' ORDER BY decided_at DESC LIMIT 1",[runId])).rows[0];
         if (!approved) {
