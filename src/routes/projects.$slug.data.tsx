@@ -3,7 +3,6 @@ import { KeyRound, Link2, Table2 } from "lucide-react";
 
 import { PageBody, Panel } from "@/components/forge/shell";
 import { Pill } from "@/components/forge/status";
-import { useForgeProject } from "@/lib/forge/use-project";
 
 export const Route = createFileRoute("/projects/$slug/data")({
   component: Data,
