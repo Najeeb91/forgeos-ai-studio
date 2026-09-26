@@ -1,3 +1,5 @@
+"use server";
+
 import { createServerFn } from "@tanstack/react-start";
 import { getProject as getMockProject, projects as mockProjects } from "@/lib/forge/data";
 import type { Project } from "@/lib/forge/types";

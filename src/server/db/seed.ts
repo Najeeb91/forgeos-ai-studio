@@ -183,6 +183,10 @@ async function runSeed() {
 
       for (const event of run.events) {
         const eventId = uuidv5(`runevent-${insertedRun.id}-${event.id}`, SEED_NAMESPACE);
+
+        // Mock data uses a time string (e.g. "10:14:00") for AI events. Prepend a date.
+        const parsedDate = event.at.includes("T") ? new Date(event.at) : new Date(`2026-09-20T${event.at}Z`);
+
         await db
           .insert(aiEvents)
           .values({
@@ -191,7 +195,7 @@ async function runSeed() {
             level: event.level,
             stage: event.stage,
             message: event.message,
-            createdAt: new Date(event.at),
+            createdAt: parsedDate,
           })
           .onConflictDoNothing();
       }

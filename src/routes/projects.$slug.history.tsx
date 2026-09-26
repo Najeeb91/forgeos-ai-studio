@@ -23,7 +23,8 @@ function History() {
     const aiEvents = project.runs.flatMap((run) =>
       run.events.map((event) => ({
         id: `${run.id}-${event.id}`,
-        at: `2026-09-20T${event.at}Z`,
+        // If event.at already contains 'T' (e.g. from DB), use it directly, else prepend mock date
+        at: event.at.includes("T") ? event.at : `2026-09-20T${event.at}Z`,
         actor: (event.level === "approval" ? "human" : "ai") as "human" | "ai",
         actorName: event.level === "approval" ? "Approval gate" : "Forge Builder",
         action: event.message,
